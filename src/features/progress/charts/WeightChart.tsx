@@ -1,0 +1,33 @@
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import type { ChartPoint } from "../../../lib/calculations";
+import { ChartFrame } from "./ChartFrame";
+
+type WeightChartProps = {
+  data: ChartPoint[];
+};
+
+export function WeightChart({ data }: WeightChartProps) {
+  return (
+    <ChartFrame isEmpty={data.length === 0} title="Peso corporal">
+      <div className="h-64">
+        <ResponsiveContainer height="100%" width="100%">
+          <LineChart data={data}>
+            <CartesianGrid stroke="#1f2937" />
+            <XAxis dataKey="name" stroke="#94a3b8" />
+            <YAxis stroke="#94a3b8" />
+            <Tooltip contentStyle={{ background: "#020617", border: "1px solid #334155" }} />
+            <Line dataKey="value" stroke="#14b8a6" strokeWidth={3} type="monotone" />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </ChartFrame>
+  );
+}
