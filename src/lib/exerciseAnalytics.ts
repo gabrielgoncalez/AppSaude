@@ -157,7 +157,7 @@ export function getLineageAnalysis(
       const history = getExerciseProgressionHistory(exercise, data.sessions, undefined, date);
       return {
         exerciseId: exercise.id,
-        exerciseName: exercise.name,
+        exerciseName: exercise.displayName ?? exercise.name,
         variantLabel: getVariantLabel(exercise),
         maxWeightKg: history.maxWeightKg,
         lastWeightKg: latest?.log ? getMaxWeight(latest.log) : undefined,

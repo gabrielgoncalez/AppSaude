@@ -99,6 +99,7 @@ function ensureAppDataDefaults(data: AppData): AppData {
     penaltyEvents: data.penaltyEvents ?? [],
     trainingPlanHistory: data.trainingPlanHistory ?? [],
     monthlyReviews: data.monthlyReviews ?? [],
+    capoeiraMovements: data.capoeiraMovements ?? [],
   };
 }
 
@@ -299,6 +300,7 @@ function inferKind(exercise: Exercise): NonNullable<Exercise["kind"]> {
 function shouldUseWaveRange(workout: Workout, exercise: Exercise): boolean {
   return (
     workout.id.startsWith("treino-") &&
+    !exercise.progressionModel &&
     exercise.repMin !== undefined &&
     exercise.repMax !== undefined &&
     exercise.durationSec === undefined &&

@@ -2,8 +2,17 @@ export type ExerciseType =
   | "strength"
   | "hypertrophy"
   | "core"
+  | "base_body"
+  | "mobility"
+  | "warmup"
   | "technical"
   | "cardio"
+  | "cooldown"
+  | "review"
+  | "rounds"
+  | "test"
+  | "dance_external"
+  | "capoeira_movement"
   | "prehab"
   | "optional"
   | "strength_technical";
@@ -13,6 +22,12 @@ export type WorkoutKind =
   | "skill"
   | "skill_cardio"
   | "cardio_mobility"
+  | "boxing"
+  | "basketball"
+  | "capoeira"
+  | "dance"
+  | "recovery"
+  | "hybrid"
   | "rest";
 
 export type WorkoutStatus = "completed" | "partial" | "skipped";
@@ -21,13 +36,16 @@ export type TrainingItemKind =
   | "strength"
   | "hypertrophy"
   | "core"
+  | "base_body"
   | "mobility"
   | "skill"
   | "rounds"
   | "timed"
   | "checklist"
   | "test"
-  | "measurement";
+  | "measurement"
+  | "dance_external"
+  | "capoeira_movement";
 
 export type TrainingItemPriority =
   | "base"
@@ -36,7 +54,9 @@ export type TrainingItemPriority =
   | "warmup"
   | "cooldown"
   | "technical"
-  | "measurement";
+  | "measurement"
+  | "review"
+  | "future";
 
 export type ProgressionModel =
   | "hybrid_wave"
@@ -46,7 +66,9 @@ export type ProgressionModel =
   | "error_reduction"
   | "quality_progression"
   | "checklist"
-  | "measurement_progression";
+  | "measurement_progression"
+  | "spaced_review"
+  | "external_course";
 
 export type MetricType =
   | "weightKg"
@@ -59,6 +81,9 @@ export type MetricType =
   | "hits"
   | "attempts"
   | "quality1to5"
+  | "fluency1to5"
+  | "confidence1to5"
+  | "memory1to5"
   | "cleanStreakSec"
   | "side"
   | "completed"
@@ -82,12 +107,14 @@ export type ExerciseVariantRole =
 export type Exercise = {
   id: string;
   name: string;
+  displayName?: string;
   type: ExerciseType;
   kind?: TrainingItemKind;
   priority?: TrainingItemPriority;
   movementPattern?: string;
   lineageId?: string;
   lineageName?: string;
+  variationGroupId?: string;
   variantRole?: ExerciseVariantRole;
   variantWaves?: WaveSlot[];
   variantNote?: string;
@@ -105,6 +132,9 @@ export type Exercise = {
   strengthWaveEligible?: boolean;
   progressionModel?: ProgressionModel;
   metricSchema?: MetricType[];
+  phaseAvailability?: "phase_1" | "phase_2" | "phase_3" | "phase_4" | "future";
+  referenceSearchQuery?: string;
+  internalItems?: string[];
   cues?: string[];
   referenceLinks?: ReferenceLink[];
   note?: string;
@@ -115,14 +145,18 @@ export type WorkoutBlock = {
   name: string;
   type:
     | "warmup"
+    | "mobility"
+    | "base_body"
     | "main"
     | "strength"
     | "hypertrophy"
+    | "technical"
     | "skill"
+    | "rounds"
     | "core"
-    | "mobility"
     | "cooldown"
-    | "test";
+    | "test"
+    | "review";
   items: Exercise[];
 };
 
@@ -135,6 +169,7 @@ export type Workout = {
     | "strength"
     | "boxing"
     | "basketball"
+    | "capoeira"
     | "dance"
     | "mobility"
     | "recovery"

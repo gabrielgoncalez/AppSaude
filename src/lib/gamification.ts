@@ -13,6 +13,7 @@ export const XP_RULES = {
   boxingCompleted: 20,
   basketballCompleted: 15,
   danceCompleted: 20,
+  capoeiraCompleted: 20,
   weekWithThreeStrength: 50,
   checkin: 30,
   cleanWorkout: 15,
@@ -119,6 +120,9 @@ function workoutBonus(session: TrainingSession): number {
   }
   if (session.workoutId === "danca") {
     return XP_RULES.danceCompleted;
+  }
+  if (session.workoutId === "capoeira") {
+    return XP_RULES.capoeiraCompleted;
   }
   return 0;
 }

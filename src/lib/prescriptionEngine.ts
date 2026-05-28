@@ -79,6 +79,9 @@ export function getExercisesForWave(workout: Workout, wave: WaveType): Exercise[
 
   const fallbackVariantIds = new Set<string>();
   variantGroups.forEach((group) => {
+    if (group.length < 2) {
+      return;
+    }
     const hasSelectedVariant = group.some((exercise) =>
       exercise.variantWaves?.includes(wave),
     );
@@ -146,6 +149,9 @@ function getSkillMessage(workout: Workout): string {
   }
   if (workout.id === "danca") {
     return "Danca: aprender, ligar movimentos e repetir com fluidez.";
+  }
+  if (workout.id === "capoeira") {
+    return "Capoeira: base, revisão espaçada e movimento novo com controle.";
   }
   return workout.name;
 }

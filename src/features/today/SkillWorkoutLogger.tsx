@@ -1,4 +1,4 @@
-import { CheckCircle2, Timer, Target } from "lucide-react";
+import { CheckCircle2, Search, Timer, Target } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "../../components/Button";
 import { Card } from "../../components/Card";
@@ -42,13 +42,7 @@ export function SkillWorkoutLogger({ workout, onComplete }: SkillWorkoutLoggerPr
           Modo técnico
         </p>
         <h2 className="mt-1 text-2xl font-black text-white">{workout.name}</h2>
-        <div className="mt-4 grid gap-2">
-          {workout.blocks?.map((block) => (
-            <div className="rounded-md bg-slate-950 px-3 py-2 text-sm text-slate-200" key={block}>
-              {block}
-            </div>
-          ))}
-        </div>
+        <WorkoutBlocks workout={workout} />
       </Card>
 
       <Card>
@@ -105,6 +99,59 @@ export function SkillWorkoutLogger({ workout, onComplete }: SkillWorkoutLoggerPr
   );
 }
 
+function WorkoutBlocks({ workout }: { workout: Workout }) {
+  if (workout.workoutBlocks?.length) {
+    return (
+      <div className="mt-4 grid gap-3">
+        {workout.workoutBlocks.map((block) => (
+          <div className="rounded-md bg-slate-950 px-3 py-2" key={block.id}>
+            <p className="text-xs font-bold uppercase tracking-wide text-teal-300">
+              {block.name}
+            </p>
+            <div className="mt-2 grid gap-1">
+              {block.items.map((item) => (
+                <div
+                  className="flex items-center justify-between gap-2 text-sm text-slate-200"
+                  key={item.id}
+                >
+                  <span>{item.displayName ?? item.name}</span>
+                  <button
+                    aria-label={`Pesquisar video de referencia para ${item.displayName ?? item.name}`}
+                    className="tap-target inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-800 text-slate-400 transition hover:border-teal-300 hover:text-teal-200"
+                    onClick={() => openReferenceSearch(item.referenceSearchQuery ?? item.name)}
+                    title="Pesquisar referencia"
+                    type="button"
+                  >
+                    <Search size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 grid gap-2">
+      {workout.blocks?.map((block) => (
+        <div className="rounded-md bg-slate-950 px-3 py-2 text-sm text-slate-200" key={block}>
+          {block}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function openReferenceSearch(query: string) {
+  window.open(
+    `https://www.google.com/search?tbm=vid&q=${encodeURIComponent(query)}`,
+    "_blank",
+    "noopener,noreferrer",
+  );
+}
+
 function getInitialMetrics(workoutId: string): SkillWorkoutMetrics {
   if (workoutId === "boxe") {
     return {
@@ -120,7 +167,7 @@ function getInitialMetrics(workoutId: string): SkillWorkoutMetrics {
       durationMin: 20,
       errors: 0,
       cleanStreakSec: 30,
-      technicalRatings: { olhos: 3, mao_fraca: 3 },
+      technicalRatings: { olhos: 3, mao_fraca: 3, controle_corporal: 3 },
     };
   }
 
@@ -129,7 +176,15 @@ function getInitialMetrics(workoutId: string): SkillWorkoutMetrics {
       durationMin: 30,
       rounds: 1,
       quality1to5: 3,
-      technicalRatings: { fluidez: 3 },
+      technicalRatings: { confianca: 3, fluidez: 3, memoria: 3 },
+    };
+  }
+
+  if (workoutId === "capoeira") {
+    return {
+      durationMin: 30,
+      quality1to5: 3,
+      technicalRatings: { base: 3, controle: 3, fluidez: 3 },
     };
   }
 
@@ -162,6 +217,7 @@ function getTechnicalLabels(workoutId: string) {
       ratingFields: [
         { key: "olhos", label: "Olhos para cima" },
         { key: "mao_fraca", label: "Mão fraca" },
+        { key: "controle_corporal", label: "Controle corporal" },
       ],
     };
   }
@@ -172,7 +228,22 @@ function getTechnicalLabels(workoutId: string) {
         { key: "durationMin" as const, label: "Duração", suffix: "min" },
         { key: "rounds" as const, label: "Coreografia", suffix: "x" },
       ],
-      ratingFields: [{ key: "fluidez", label: "Fluidez" }],
+      ratingFields: [
+        { key: "confianca", label: "Confiança" },
+        { key: "fluidez", label: "Fluidez" },
+        { key: "memoria", label: "Memória" },
+      ],
+    };
+  }
+
+  if (workoutId === "capoeira") {
+    return {
+      numberFields: [{ key: "durationMin" as const, label: "Duração", suffix: "min" }],
+      ratingFields: [
+        { key: "base", label: "Base" },
+        { key: "controle", label: "Controle" },
+        { key: "fluidez", label: "Fluidez" },
+      ],
     };
   }
 

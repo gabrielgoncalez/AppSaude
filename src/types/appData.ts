@@ -173,6 +173,30 @@ export type MonthlyReview = {
   message: string;
 };
 
+export type CapoeiraMovementStatus =
+  | "not_started"
+  | "learning"
+  | "validating"
+  | "mastered"
+  | "review";
+
+export type CapoeiraMovement = {
+  lessonNumber: number;
+  displayName: string;
+  category: string;
+  status: CapoeiraMovementStatus;
+  rightSideDone?: boolean;
+  leftSideDone?: boolean;
+  quality1to5?: number;
+  fluency1to5?: number;
+  reviewsCompleted: number;
+  startedAt?: string;
+  masteredAt?: string;
+  canUseBag: boolean;
+  referenceSearchQuery: string;
+  notes?: string;
+};
+
 export type AppData = {
   version: number;
   profile: Profile;
@@ -190,6 +214,7 @@ export type AppData = {
   penaltyEvents?: PenaltyEvent[];
   trainingPlanHistory?: TrainingPlanVersion[];
   monthlyReviews?: MonthlyReview[];
+  capoeiraMovements?: CapoeiraMovement[];
 };
 
 export type BackupSummary = {

@@ -42,6 +42,7 @@ export function ExerciseCard({
       : getWaveRepRangeLabel(exercise);
   const targetSets = prescription?.targetSets ?? exercise.targetSets;
   const restSec = prescription?.restSec ?? exercise.restSec;
+  const displayName = exercise.displayName ?? exercise.name;
 
   return (
     <Card>
@@ -51,11 +52,11 @@ export function ExerciseCard({
             {exercise.type}
           </p>
           <div className="mt-1 flex items-center gap-2">
-            <h3 className="text-xl font-black text-white">{exercise.name}</h3>
+            <h3 className="text-xl font-black text-white">{displayName}</h3>
             <button
-              aria-label={`Pesquisar video de execucao para ${exercise.name}`}
+              aria-label={`Pesquisar video de execucao para ${displayName}`}
               className="tap-target inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-700 bg-slate-950 text-slate-300 transition hover:border-teal-300 hover:text-teal-200"
-              onClick={() => openExerciseVideoSearch(exercise.name)}
+              onClick={() => openExerciseVideoSearch(exercise)}
               title="Pesquisar video de execucao"
               type="button"
             >
@@ -177,8 +178,11 @@ export function ExerciseCard({
   );
 }
 
-function openExerciseVideoSearch(exerciseName: string) {
-  const query = encodeURIComponent(`${exerciseName} execucao correta exercicio`);
+function openExerciseVideoSearch(exercise: Exercise) {
+  const query = encodeURIComponent(
+    exercise.referenceSearchQuery ??
+      `${exercise.displayName ?? exercise.name} execucao correta exercicio`,
+  );
   window.open(
     `https://www.google.com/search?tbm=vid&q=${query}`,
     "_blank",

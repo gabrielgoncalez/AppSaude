@@ -2,6 +2,7 @@ import type { AppData } from "../types/appData";
 import { createInitialSchedule } from "../lib/schedule";
 import { normalizeTrainingPlanForWave } from "../lib/trainingPlan";
 import { DEFAULT_ACHIEVEMENTS } from "./achievements";
+import { CAPOEIRA_MOVEMENTS } from "./capoeiraMovements";
 import { DEFAULT_REWARDS } from "./defaultRewards";
 import { INITIAL_TRAINING_PLAN } from "./initialTrainingPlan";
 
@@ -47,5 +48,6 @@ export function createInitialAppData(now = new Date()): AppData {
     penaltyEvents: [],
     trainingPlanHistory: [],
     monthlyReviews: [],
+    capoeiraMovements: CAPOEIRA_MOVEMENTS,
   };
 }

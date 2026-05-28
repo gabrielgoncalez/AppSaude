@@ -206,6 +206,34 @@ export function PlanPage({ plan, onUpdatePlan }: PlanPageProps) {
             </div>
           ) : null}
 
+          {workout.workoutBlocks?.length ? (
+            <div className="mt-4 grid gap-3">
+              {workout.workoutBlocks.map((block) => (
+                <div
+                  className="rounded-lg border border-slate-800 bg-slate-950 p-3"
+                  key={block.id}
+                >
+                  <p className="text-xs font-bold uppercase tracking-wide text-teal-300">
+                    {block.name}
+                  </p>
+                  <div className="mt-2 grid gap-1 text-sm text-slate-300">
+                    {block.items.map((item) => (
+                      <div
+                        className="flex items-center justify-between gap-2"
+                        key={item.id}
+                      >
+                        <span>{item.displayName ?? item.name}</span>
+                        <span className="text-xs text-slate-500">
+                          {item.targetSets}x · {item.durationSec ? `${item.durationSec}s` : item.repMin && item.repMax ? `${item.repMin}-${item.repMax}` : item.kind ?? item.type}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
           {workout.exercises?.length ? (
             <div className="mt-4 space-y-3">
               {workout.exercises.map((exercise, index) => (

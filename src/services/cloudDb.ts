@@ -16,6 +16,7 @@ import type {
   AppData,
   BodyCheckin,
   BodyGoal,
+  CapoeiraMovement,
   DayEvent,
   MonthlyReview,
   PenaltyEvent,
@@ -48,6 +49,7 @@ type DataPieces = {
     penaltyEvents?: PenaltyEvent[];
     trainingPlanHistory?: TrainingPlanVersion[];
     monthlyReviews?: MonthlyReview[];
+    capoeiraMovements?: CapoeiraMovement[];
   };
 };
 
@@ -210,6 +212,7 @@ function assembleAppData(pieces: DataPieces): AppData | undefined {
     penaltyEvents: pieces.metadata?.penaltyEvents ?? [],
     trainingPlanHistory: pieces.metadata?.trainingPlanHistory ?? [],
     monthlyReviews: pieces.metadata?.monthlyReviews ?? [],
+    capoeiraMovements: pieces.metadata?.capoeiraMovements ?? [],
   };
 }
 
@@ -226,6 +229,7 @@ export async function saveAppData(uid: string, data: AppData): Promise<void> {
     penaltyEvents: data.penaltyEvents ?? [],
     trainingPlanHistory: data.trainingPlanHistory ?? [],
     monthlyReviews: data.monthlyReviews ?? [],
+    capoeiraMovements: data.capoeiraMovements ?? [],
   });
 
   data.dayEvents.forEach((event) =>
@@ -265,6 +269,7 @@ export async function saveDerivedAppData(
     penaltyEvents: after.penaltyEvents ?? [],
     trainingPlanHistory: after.trainingPlanHistory ?? [],
     monthlyReviews: after.monthlyReviews ?? [],
+    capoeiraMovements: after.capoeiraMovements ?? [],
   });
 
   after.dayEvents
