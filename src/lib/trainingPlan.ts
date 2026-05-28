@@ -1,5 +1,11 @@
 import type { AppData } from "../types/appData";
 import type { Exercise, TrainingPlan, Workout } from "../types/training";
+import { CAPOEIRA_MOVEMENTS } from "../data/capoeiraMovements";
+import {
+  INITIAL_TRAINING_PLAN,
+  MASTER_TRAINING_PLAN_ID,
+  MASTER_TRAINING_PLAN_VERSION,
+} from "../data/initialTrainingPlan";
 
 export const WAVE_REP_MIN = 8;
 export const WAVE_REP_MAX = 15;
@@ -8,9 +14,12 @@ export function normalizeAppDataForWave(data: AppData): {
   data: AppData;
   changed: boolean;
 } {
-  const nextPlan = normalizeTrainingPlanForWave(data.trainingPlan);
+  const basePlan = shouldUpgradeToMasterPlan(data.trainingPlan)
+    ? cloneTrainingPlan(INITIAL_TRAINING_PLAN)
+    : data.trainingPlan;
+  const nextPlan = normalizeTrainingPlanForWave(basePlan);
   const withDefaults = ensureAppDataDefaults({ ...data, trainingPlan: nextPlan });
-  if (nextPlan === data.trainingPlan && withDefaults === data) {
+  if (basePlan === data.trainingPlan && nextPlan === data.trainingPlan && withDefaults === data) {
     return { data, changed: false };
   }
 
@@ -71,7 +80,9 @@ function ensureAppDataDefaults(data: AppData): AppData {
     data.bodyGoals === undefined ||
     data.penaltyEvents === undefined ||
     data.trainingPlanHistory === undefined ||
-    data.monthlyReviews === undefined;
+    data.monthlyReviews === undefined ||
+    data.capoeiraMovements === undefined ||
+    data.capoeiraMovements.length === 0;
 
   if (!missing) {
     return data;
@@ -99,8 +110,44 @@ function ensureAppDataDefaults(data: AppData): AppData {
     penaltyEvents: data.penaltyEvents ?? [],
     trainingPlanHistory: data.trainingPlanHistory ?? [],
     monthlyReviews: data.monthlyReviews ?? [],
-    capoeiraMovements: data.capoeiraMovements ?? [],
+    capoeiraMovements: data.capoeiraMovements?.length
+      ? data.capoeiraMovements
+      : CAPOEIRA_MOVEMENTS,
   };
+}
+
+function shouldUpgradeToMasterPlan(plan: TrainingPlan): boolean {
+  if (
+    plan.id === MASTER_TRAINING_PLAN_ID &&
+    plan.version === MASTER_TRAINING_PLAN_VERSION &&
+    isStructuredMasterPlan(plan)
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function isStructuredMasterPlan(plan: TrainingPlan): boolean {
+  const workoutsById = new Map(plan.workouts.map((workout) => [workout.id, workout]));
+  const requiredWorkoutIds = [
+    "treino-a",
+    "boxe",
+    "treino-b",
+    "basquete-handles",
+    "treino-c",
+    "capoeira",
+    "danca",
+  ];
+
+  return requiredWorkoutIds.every((id) => {
+    const workout = workoutsById.get(id);
+    return Boolean(workout?.workoutBlocks?.length);
+  });
+}
+
+function cloneTrainingPlan(plan: TrainingPlan): TrainingPlan {
+  return structuredClone(plan);
 }
 
 function enrichExerciseMetadata(workout: Workout, exercise: Exercise): Exercise {

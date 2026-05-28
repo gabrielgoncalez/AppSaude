@@ -8,6 +8,9 @@ import type {
   WorkoutBlock,
 } from "../types/training";
 
+export const MASTER_TRAINING_PLAN_ID = "gigante-agil-master-plan";
+export const MASTER_TRAINING_PLAN_VERSION = 2;
+
 type ExerciseInput = Omit<Exercise, "name" | "targetSets" | "restSec"> & {
   displayName: string;
   targetSets?: number;
@@ -1884,5 +1887,8 @@ const domingo: Workout = {
 domingo.blocks = workoutBlocks(domingo);
 
 export const INITIAL_TRAINING_PLAN: TrainingPlan = {
+  id: MASTER_TRAINING_PLAN_ID,
+  version: MASTER_TRAINING_PLAN_VERSION,
+  updatedAt: "2026-05-28",
   workouts: [domingo, treinoA, boxe, treinoB, basquete, treinoC, capoeira, danca],
 };

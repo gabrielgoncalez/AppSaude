@@ -1,8 +1,9 @@
-import { CheckCircle2, Search, Timer, Target } from "lucide-react";
+import { CheckCircle2, ChevronLeft, ChevronRight, Search, Timer, Target } from "lucide-react";
+import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { Button } from "../../components/Button";
 import { Card } from "../../components/Card";
-import type { SkillWorkoutMetrics, Workout } from "../../types/training";
+import type { Exercise, SkillWorkoutMetrics, Workout, WorkoutBlock } from "../../types/training";
 
 type SkillWorkoutLoggerProps = {
   workout: Workout;
@@ -19,7 +20,9 @@ type MetricKey =
 
 export function SkillWorkoutLogger({ workout, onComplete }: SkillWorkoutLoggerProps) {
   const [metrics, setMetrics] = useState<SkillWorkoutMetrics>(() => getInitialMetrics(workout.id));
+  const [blockState, setBlockState] = useState({ index: 0, workoutId: workout.id });
   const labels = useMemo(() => getTechnicalLabels(workout.id), [workout.id]);
+  const activeBlockIndex = blockState.workoutId === workout.id ? blockState.index : 0;
 
   function setNumber(key: MetricKey, value: number | undefined) {
     setMetrics((current) => ({ ...current, [key]: value }));
@@ -42,7 +45,11 @@ export function SkillWorkoutLogger({ workout, onComplete }: SkillWorkoutLoggerPr
           Modo técnico
         </p>
         <h2 className="mt-1 text-2xl font-black text-white">{workout.name}</h2>
-        <WorkoutBlocks workout={workout} />
+        <TechnicalWorkoutFocus
+          activeBlockIndex={activeBlockIndex}
+          onChangeBlock={(index) => setBlockState({ index, workoutId: workout.id })}
+          workout={workout}
+        />
       </Card>
 
       <Card>
@@ -99,49 +106,236 @@ export function SkillWorkoutLogger({ workout, onComplete }: SkillWorkoutLoggerPr
   );
 }
 
-function WorkoutBlocks({ workout }: { workout: Workout }) {
+function TechnicalWorkoutFocus({
+  workout,
+  activeBlockIndex,
+  onChangeBlock,
+}: {
+  workout: Workout;
+  activeBlockIndex: number;
+  onChangeBlock: (index: number) => void;
+}) {
   if (workout.workoutBlocks?.length) {
+    const blocks = workout.workoutBlocks;
+    const safeIndex = Math.min(activeBlockIndex, blocks.length - 1);
+    const currentBlock = blocks[safeIndex];
+    const nextBlock = blocks[safeIndex + 1];
+    const completedBlocks = blocks.slice(0, safeIndex);
+
     return (
-      <div className="mt-4 grid gap-3">
-        {workout.workoutBlocks.map((block) => (
-          <div className="rounded-md bg-slate-950 px-3 py-2" key={block.id}>
-            <p className="text-xs font-bold uppercase tracking-wide text-teal-300">
-              {block.name}
+      <div className="mt-4 space-y-3">
+        {completedBlocks.length ? (
+          <div className="rounded-md border border-slate-800 bg-slate-950 px-3 py-2">
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+              Blocos anteriores
             </p>
-            <div className="mt-2 grid gap-1">
-              {block.items.map((item) => (
-                <div
-                  className="flex items-center justify-between gap-2 text-sm text-slate-200"
-                  key={item.id}
-                >
-                  <span>{item.displayName ?? item.name}</span>
-                  <button
-                    aria-label={`Pesquisar video de referencia para ${item.displayName ?? item.name}`}
-                    className="tap-target inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-800 text-slate-400 transition hover:border-teal-300 hover:text-teal-200"
-                    onClick={() => openReferenceSearch(item.referenceSearchQuery ?? item.name)}
-                    title="Pesquisar referencia"
-                    type="button"
-                  >
-                    <Search size={14} />
-                  </button>
-                </div>
-              ))}
+            <p className="mt-1 text-sm font-bold text-slate-300">
+              {completedBlocks.map((block) => block.name).join(" -> ")}
+            </p>
+          </div>
+        ) : null}
+
+        <div className="rounded-lg border border-teal-300/30 bg-teal-400/10 p-3">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wide text-teal-200">
+                Bloco {safeIndex + 1} de {blocks.length} · {getBlockLabel(currentBlock)}
+              </p>
+              <h3 className="mt-1 text-xl font-black text-white">{currentBlock.name}</h3>
+            </div>
+            <div className="flex gap-2">
+              <IconButton
+                disabled={safeIndex === 0}
+                label="Bloco anterior"
+                onClick={() => onChangeBlock(Math.max(0, safeIndex - 1))}
+              >
+                <ChevronLeft size={16} />
+              </IconButton>
+              <IconButton
+                disabled={safeIndex >= blocks.length - 1}
+                label="Próximo bloco"
+                onClick={() => onChangeBlock(Math.min(blocks.length - 1, safeIndex + 1))}
+              >
+                <ChevronRight size={16} />
+              </IconButton>
             </div>
           </div>
-        ))}
+
+          <div className="mt-3 grid gap-2">
+            {currentBlock.items.map((item) => (
+              <TechnicalItemRow item={item} key={item.id} />
+            ))}
+          </div>
+
+          <Button
+            className="mt-4 w-full"
+            disabled={safeIndex >= blocks.length - 1}
+            icon={<CheckCircle2 size={18} />}
+            onClick={() => onChangeBlock(Math.min(blocks.length - 1, safeIndex + 1))}
+            variant={safeIndex >= blocks.length - 1 ? "secondary" : "primary"}
+          >
+            {safeIndex >= blocks.length - 1 ? "Último bloco aberto" : "Finalizar bloco"}
+          </Button>
+        </div>
+
+        {nextBlock ? (
+          <div className="rounded-md border border-slate-800 bg-slate-950 px-3 py-2">
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+              Próximo bloco
+            </p>
+            <p className="mt-1 font-black text-white">{nextBlock.name}</p>
+          </div>
+        ) : null}
       </div>
     );
   }
 
+  const blocks = workout.blocks ?? [];
+  const safeIndex = Math.min(activeBlockIndex, Math.max(blocks.length - 1, 0));
+  const currentBlock = blocks[safeIndex];
+  const nextBlock = blocks[safeIndex + 1];
+
   return (
-    <div className="mt-4 grid gap-2">
-      {workout.blocks?.map((block) => (
-        <div className="rounded-md bg-slate-950 px-3 py-2 text-sm text-slate-200" key={block}>
-          {block}
+    <div className="mt-4 space-y-3">
+      <div className="rounded-lg border border-orange-300/30 bg-orange-400/10 p-3">
+        <p className="text-xs font-bold uppercase tracking-wide text-orange-200">
+          Plano simplificado
+        </p>
+        <h3 className="mt-1 text-xl font-black text-white">
+          {currentBlock ?? "Sem blocos estruturados"}
+        </h3>
+        <div className="mt-3 flex gap-2">
+          <IconButton
+            disabled={safeIndex === 0}
+            label="Bloco anterior"
+            onClick={() => onChangeBlock(Math.max(0, safeIndex - 1))}
+          >
+            <ChevronLeft size={16} />
+          </IconButton>
+          <IconButton
+            disabled={safeIndex >= blocks.length - 1}
+            label="Próximo bloco"
+            onClick={() => onChangeBlock(Math.min(blocks.length - 1, safeIndex + 1))}
+          >
+            <ChevronRight size={16} />
+          </IconButton>
         </div>
-      ))}
+      </div>
+      {nextBlock ? (
+        <div className="rounded-md border border-slate-800 bg-slate-950 px-3 py-2">
+          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+            Próximo bloco
+          </p>
+          <p className="mt-1 font-black text-white">{nextBlock}</p>
+        </div>
+      ) : null}
     </div>
   );
+}
+
+function TechnicalItemRow({ item }: { item: Exercise }) {
+  const name = item.displayName ?? item.name;
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-md border border-slate-800 bg-slate-950 px-3 py-3">
+      <div className="min-w-0">
+        <p className="font-black text-white">{name}</p>
+        <p className="mt-1 text-xs font-bold uppercase tracking-wide text-slate-400">
+          {formatItemTarget(item)}
+        </p>
+        {item.note ? (
+          <p className="mt-2 text-sm leading-relaxed text-slate-300">{item.note}</p>
+        ) : null}
+      </div>
+      <button
+        aria-label={`Pesquisar vídeo de referência para ${name}`}
+        className="tap-target inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-700 text-slate-300 transition hover:border-teal-300 hover:text-teal-200"
+        onClick={() => openReferenceSearch(item.referenceSearchQuery ?? name)}
+        title="Pesquisar referência"
+        type="button"
+      >
+        <Search size={16} />
+      </button>
+    </div>
+  );
+}
+
+function IconButton({
+  children,
+  disabled,
+  label,
+  onClick,
+}: {
+  children: ReactNode;
+  disabled: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      aria-label={label}
+      className="tap-target inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-700 text-slate-300 transition hover:border-teal-300 hover:text-teal-200 disabled:cursor-not-allowed disabled:opacity-40"
+      disabled={disabled}
+      onClick={onClick}
+      title={label}
+      type="button"
+    >
+      {children}
+    </button>
+  );
+}
+
+function getBlockLabel(block: WorkoutBlock): string {
+  const labels: Record<WorkoutBlock["type"], string> = {
+    warmup: "aquecimento",
+    mobility: "mobilidade",
+    base_body: "base corporal",
+    main: "principal",
+    strength: "força",
+    hypertrophy: "hipertrofia",
+    technical: "técnica",
+    skill: "habilidade",
+    rounds: "rounds",
+    core: "base corporal",
+    cooldown: "finalização",
+    test: "teste",
+    review: "revisão",
+  };
+  return labels[block.type];
+}
+
+function formatItemTarget(item: Exercise): string {
+  const parts: string[] = [];
+  if (item.targetSets > 1) {
+    parts.push(`${item.targetSets} séries`);
+  }
+  if (item.repMin !== undefined && item.repMax !== undefined) {
+    parts.push(
+      item.repMin === item.repMax
+        ? `${item.repMin} reps`
+        : `${item.repMin}-${item.repMax} reps`,
+    );
+  }
+  if (item.durationSec) {
+    parts.push(formatDuration(item.durationSec));
+  }
+  if (item.holdSec) {
+    parts.push(`${item.holdSec}s pausa`);
+  }
+  if (item.restSec) {
+    parts.push(`${item.restSec}s descanso`);
+  }
+  if (item.equipment) {
+    parts.push(item.equipment);
+  }
+  return parts.length ? parts.join(" · ") : "Execução técnica";
+}
+
+function formatDuration(seconds: number): string {
+  if (seconds < 60) {
+    return `${seconds}s`;
+  }
+  const minutes = Math.round(seconds / 60);
+  return `${minutes} min`;
 }
 
 function openReferenceSearch(query: string) {

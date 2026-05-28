@@ -55,8 +55,12 @@ type DataPieces = {
 
 export async function ensureUserData(uid: string): Promise<void> {
   const profileRef = doc(db, "users", uid, "profile", CURRENT);
-  const profile = await getDoc(profileRef);
-  if (profile.exists()) {
+  const trainingPlanRef = doc(db, "users", uid, "trainingPlan", CURRENT);
+  const [profile, trainingPlan] = await Promise.all([
+    getDoc(profileRef),
+    getDoc(trainingPlanRef),
+  ]);
+  if (profile.exists() && trainingPlan.exists()) {
     return;
   }
 

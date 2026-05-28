@@ -185,6 +185,9 @@ export type Workout = {
 export type WorkoutTemplate = Workout;
 
 export type TrainingPlan = {
+  id?: string;
+  version?: number;
+  updatedAt?: string;
   workouts: Workout[];
 };
 
