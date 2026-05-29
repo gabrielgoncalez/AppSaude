@@ -217,4 +217,15 @@ describe("hybrid engines", () => {
     expect(lineage.variants.find((item) => item.exerciseId === "supino-reto-maquina")?.maxWeightKg).toBe(40);
     expect(lineage.variants.find((item) => item.exerciseId === "supino-reto-halteres")?.maxWeightKg).toBe(20);
   });
+
+  it("gera prescribedBlocks para musculacao, tecnicos, capoeira e danca", () => {
+    const data = createInitialAppData(new Date("2026-05-25T10:00:00.000Z"));
+    const ids = ["treino-a", "boxe", "basquete-handles", "capoeira", "danca"];
+
+    ids.forEach((id) => {
+      const workout = data.trainingPlan.workouts.find((item) => item.id === id);
+      expect(workout).toBeTruthy();
+      expect(getTodayPrescription(data, workout!).prescribedBlocks.length).toBeGreaterThan(0);
+    });
+  });
 });

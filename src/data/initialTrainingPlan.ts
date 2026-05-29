@@ -9,7 +9,7 @@ import type {
 } from "../types/training";
 
 export const MASTER_TRAINING_PLAN_ID = "gigante-agil-master-plan";
-export const MASTER_TRAINING_PLAN_VERSION = 2;
+export const MASTER_TRAINING_PLAN_VERSION = 3;
 
 type ExerciseInput = Omit<Exercise, "name" | "targetSets" | "restSec"> & {
   displayName: string;
@@ -73,8 +73,39 @@ function block(
   name: string,
   type: WorkoutBlock["type"],
   items: Exercise[],
+  options: Pick<WorkoutBlock, "blockMode" | "required"> = {},
 ): WorkoutBlock {
-  return { id, name, type, items };
+  return {
+    id,
+    name,
+    type,
+    blockMode: options.blockMode ?? inferBlockMode(type),
+    required: options.required ?? isRequiredBlock(type),
+    items,
+  };
+}
+
+function inferBlockMode(type: WorkoutBlock["type"]): NonNullable<WorkoutBlock["blockMode"]> {
+  if (type === "strength" || type === "hypertrophy" || type === "main") {
+    return "sets";
+  }
+  if (type === "rounds") {
+    return "rounds";
+  }
+  if (type === "test") {
+    return "test";
+  }
+  if (type === "technical" || type === "skill" || type === "review") {
+    return "checklist";
+  }
+  if (type === "cooldown" || type === "warmup" || type === "mobility" || type === "base_body") {
+    return "checklist";
+  }
+  return "checklist";
+}
+
+function isRequiredBlock(type: WorkoutBlock["type"]): boolean {
+  return type === "strength" || type === "hypertrophy" || type === "main" || type === "rounds";
 }
 
 function workoutBlocks(workout: Workout): string[] {
@@ -179,13 +210,146 @@ const commonBaseBody = [
   }),
   timed({
     id: "base-postura-cavalo-alta",
-    displayName: "Postura do Cavalo alta",
+    displayName: "Postura do Cavalo",
     type: "base_body",
     kind: "core",
     priority: "warmup",
     durationSec: 20,
     equipment: "peso corporal",
     note: "Base alta, joelhos alinhados, respiração solta.",
+  }),
+];
+
+const strengthBaseBody = commonBaseBody;
+
+const basketballBaseBody = [
+  timed({
+    id: "basquete-base-postura-cavalo",
+    displayName: "Postura do Cavalo",
+    type: "base_body",
+    kind: "core",
+    priority: "warmup",
+    durationSec: 25,
+    equipment: "peso corporal",
+    referenceSearchQuery: "Postura do Cavalo base corporal",
+    note: "Base firme para quadril e pernas. A intensidade fica controlada.",
+  }),
+  timed({
+    id: "basquete-postura-defensiva",
+    displayName: "Postura Defensiva de Basquete",
+    type: "base_body",
+    kind: "core",
+    priority: "warmup",
+    durationSec: 30,
+    equipment: "peso corporal",
+    referenceSearchQuery: "basketball defensive stance beginner",
+    note: "Quadril baixo, peito aberto, pes ativos e olhos para cima.",
+  }),
+  timed({
+    id: "basquete-ponte-gluteo-sustentada",
+    displayName: "Ponte de Gluteo Sustentada",
+    type: "base_body",
+    kind: "core",
+    priority: "warmup",
+    durationSec: 30,
+    equipment: "peso corporal",
+    referenceSearchQuery: "glute bridge hold beginner",
+  }),
+  timed({
+    id: "basquete-prancha-lateral-joelho",
+    displayName: "Prancha Lateral com Joelho",
+    type: "base_body",
+    kind: "core",
+    priority: "warmup",
+    durationSec: 20,
+    equipment: "peso corporal",
+    referenceSearchQuery: "knee side plank beginner",
+  }),
+];
+
+const boxingBaseBody = [
+  timed({
+    id: "boxe-base-postura-cavalo",
+    displayName: "Postura do Cavalo",
+    type: "base_body",
+    kind: "core",
+    priority: "warmup",
+    durationSec: 25,
+    equipment: "peso corporal",
+    referenceSearchQuery: "Postura do Cavalo base corporal",
+  }),
+  timed({
+    id: "boxe-guarda-alta-isometrica",
+    displayName: "Guarda Alta Isometrica",
+    type: "base_body",
+    kind: "core",
+    priority: "warmup",
+    durationSec: 30,
+    equipment: "peso corporal",
+    referenceSearchQuery: "boxe guarda alta iniciante",
+    note: "Maos no rosto, cotovelos vivos e ombros sem travar.",
+  }),
+  timed({
+    id: "boxe-prancha-alta-inclinada",
+    displayName: "Prancha Alta/Inclinada",
+    type: "base_body",
+    kind: "core",
+    priority: "warmup",
+    durationSec: 30,
+    equipment: "peso corporal",
+    referenceSearchQuery: "incline high plank beginner",
+  }),
+  timed({
+    id: "boxe-ponte-gluteo-sustentada",
+    displayName: "Ponte de Gluteo Sustentada",
+    type: "base_body",
+    kind: "core",
+    priority: "warmup",
+    durationSec: 30,
+    equipment: "peso corporal",
+    referenceSearchQuery: "glute bridge hold beginner",
+  }),
+];
+
+const capoeiraBaseBody = [
+  timed({
+    id: "capoeira-postura-cavalo",
+    displayName: "Postura do Cavalo",
+    type: "base_body",
+    kind: "core",
+    priority: "base",
+    durationSec: 30,
+    metricSchema: ["durationSec", "quality1to5", "completed"],
+    progressionModel: "time_progression",
+    referenceSearchQuery: "Postura do Cavalo capoeira Mestre Koioty",
+    note: "Revisar 2-3x por semana.",
+  }),
+  timed({
+    id: "capoeira-prancha-alta-inclinada",
+    displayName: "Prancha Alta/Inclinada",
+    type: "base_body",
+    kind: "core",
+    priority: "base",
+    durationSec: 30,
+    referenceSearchQuery: "prancha alta inclinada iniciante",
+  }),
+  timed({
+    id: "capoeira-ponte-gluteo-sustentada",
+    displayName: "Ponte de Gluteo Sustentada",
+    type: "base_body",
+    kind: "core",
+    priority: "base",
+    durationSec: 30,
+    referenceSearchQuery: "glute bridge hold beginner",
+  }),
+  timed({
+    id: "capoeira-prancha-lateral-joelho",
+    displayName: "Prancha Lateral com Joelho",
+    type: "base_body",
+    kind: "core",
+    priority: "base",
+    durationSec: 20,
+    referenceSearchQuery: "knee side plank beginner",
   }),
 ];
 
@@ -313,7 +477,7 @@ const treinoA: Workout = {
     block("a-bike-ida", "Bike ida", "warmup", [bike("a-bike-ida-item", "Bike ida - 2,1 km")]),
     block("a-reset", "Reset pós-bike", "warmup", [resetBlock("a-reset-pos-bike")]),
     block("a-mobilidade", "Mobilidade Pré-Musculação", "mobility", commonMobility),
-    block("a-base-corporal", "Base Corporal de Ativação", "base_body", commonBaseBody),
+    block("a-base-corporal", "Base Corporal de Ativação", "base_body", strengthBaseBody),
     block("a-aquecimento-especifico", "Aquecimento Específico", "warmup", [
       skill({
         id: "a-aquecimento-leg-press-leve",
@@ -463,6 +627,7 @@ const treinoA: Workout = {
       }),
       strength({
         id: "elevacao-lateral-halteres",
+        legacyIds: ["elevacao-lateral"],
         displayName: "Elevação Lateral Halteres",
         type: "hypertrophy",
         kind: "hypertrophy",
@@ -551,14 +716,14 @@ const treinoA: Workout = {
     block("a-capoeira-leve", "Revisão Leve de Capoeira opcional", "review", [
       skill({
         id: "a-revisao-ginga",
-        displayName: "Ginga leve",
+        displayName: "Ginga",
         type: "capoeira_movement",
         kind: "capoeira_movement",
         priority: "review",
         durationSec: 180,
         progressionModel: "spaced_review",
         referenceSearchQuery: "Ginga capoeira Mestre Koioty",
-        note: "Opcional. Revisão leve, sem cansar o treino de musculação.",
+        note: "Opcional. Execução leve, sem cansar o treino de musculação.",
       }),
     ]),
   ],
@@ -581,7 +746,7 @@ const boxe: Workout = {
     block("boxe-capoeira", "Revisão Leve de Capoeira para Boxe", "review", [
       skill({
         id: "boxe-ginga-leve",
-        displayName: "Ginga leve",
+        displayName: "Ginga",
         type: "capoeira_movement",
         kind: "capoeira_movement",
         durationSec: 180,
@@ -590,7 +755,7 @@ const boxe: Workout = {
       }),
       skill({
         id: "boxe-esquiva-lateral-leve",
-        displayName: "Esquiva lateral leve",
+        displayName: "Esquiva lateral",
         type: "capoeira_movement",
         kind: "capoeira_movement",
         durationSec: 120,
@@ -601,7 +766,7 @@ const boxe: Workout = {
     block("boxe-preparacao", "Preparação Geral de Boxe", "warmup", [
       timed({
         id: "boxe-aquecimento-geral",
-        displayName: "Aquecimento geral",
+        displayName: "Preparação Geral de Boxe",
         type: "warmup",
         durationSec: 480,
         note: "5-8 min. Ritmo progressivo, sem pressa.",
@@ -630,7 +795,7 @@ const boxe: Workout = {
         note: "Soltar base e rotação.",
       }),
     ]),
-    block("boxe-base-corporal", "Base Corporal e Estabilidade para Boxe", "base_body", commonBaseBody),
+    block("boxe-base-corporal", "Base Corporal e Estabilidade para Boxe", "base_body", boxingBaseBody),
     block("boxe-sombra", "Sombra Técnica", "technical", [
       skill({
         id: "boxe-sombra-base-jab",
@@ -719,6 +884,29 @@ const boxe: Workout = {
         metricSchema: ["hits", "attempts", "quality1to5", "completed"],
         referenceSearchQuery: "boxe combo 1 2 3 saída lateral",
       }),
+      ...[
+        "1-2-esquiva-3",
+        "1-2-pêndulo-3",
+        "1-2-3-volta",
+        "1-2-3-esquiva-5",
+        "2-3-esquiva-5-volta",
+        "1-2-pêndulo-5-3",
+      ].map((combo) =>
+        skill({
+          id: `boxe-combo-${combo.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]+/g, "-").toLowerCase()}`,
+          displayName: combo,
+          type: "technical",
+          kind: "skill",
+          priority: "future",
+          active: false,
+          phaseAvailability: "future",
+          durationSec: 300,
+          progressionModel: "accuracy_progression",
+          metricSchema: ["hits", "attempts", "quality1to5", "completed"],
+          referenceSearchQuery: `boxe combo ${combo}`,
+          note: "Futuro. Entra quando jab, direto, esquiva e retorno estiverem consistentes.",
+        }),
+      ),
     ]),
     block("boxe-teste", "Teste Técnico de Boxe", "test", [
       skill({
@@ -753,7 +941,7 @@ const treinoB: Workout = {
     block("b-bike-ida", "Bike ida", "warmup", [bike("b-bike-ida-item", "Bike ida - 2,1 km")]),
     block("b-reset", "Reset pós-bike", "warmup", [resetBlock("b-reset-pos-bike")]),
     block("b-mobilidade", "Mobilidade Pré-Musculação", "mobility", commonMobility),
-    block("b-base-corporal", "Base Corporal de Ativação", "base_body", commonBaseBody),
+    block("b-base-corporal", "Base Corporal de Ativação", "base_body", strengthBaseBody),
     block("b-aquecimento-especifico", "Aquecimento Específico", "warmup", [
       skill({
         id: "b-agachamento-sem-carga",
@@ -1156,7 +1344,7 @@ const basquete: Workout = {
         repMax: 5,
       }),
     ]),
-    block("basquete-base", "Base Corporal e Estabilidade", "base_body", commonBaseBody),
+    block("basquete-base", "Base Corporal e Estabilidade", "base_body", basketballBaseBody),
     block("basquete-controle", "Controle Fundamental de Drible", "technical", [
       skill({
         id: "pound-dribble",
@@ -1198,6 +1386,29 @@ const basquete: Workout = {
         progressionModel: "error_reduction",
         referenceSearchQuery: "basketball crossover control drill",
       }),
+      ...[
+        ["side-to-side-dribble", "Side to Side Dribble"],
+        ["front-to-back-dribble", "Front to Back Dribble"],
+        ["between-the-legs", "Between the Legs"],
+        ["inside-out", "Inside Out"],
+        ["behind-the-back", "Behind the Back"],
+        ["drible-livre-controlado", "Drible Livre Controlado"],
+      ].map(([id, displayName]) =>
+        skill({
+          id,
+          displayName,
+          type: "technical",
+          kind: "skill",
+          priority: "future",
+          active: false,
+          phaseAvailability: "future",
+          durationSec: 60,
+          metricSchema: ["durationSec", "errors", "quality1to5", "completed"],
+          progressionModel: "error_reduction",
+          referenceSearchQuery: `${displayName} basketball drill beginner`,
+          note: "Futuro. Entra quando a base de controle estiver sólida.",
+        }),
+      ),
     ]),
     block("basquete-teste-5min", "Teste 5 Minutos - Handle Control", "test", [
       skill({
@@ -1228,7 +1439,7 @@ const basquete: Workout = {
     block("basquete-defensive-slides", "Defensive Slides", "technical", [
       skill({
         id: "defensive-slides",
-        displayName: "Deslocamento defensivo leve/moderado",
+        displayName: "Defensive Slides",
         type: "technical",
         kind: "skill",
         durationSec: 300,
@@ -1280,7 +1491,7 @@ const treinoC: Workout = {
     block("c-bike-ida", "Bike ida", "warmup", [bike("c-bike-ida-item", "Bike ida - 2,1 km")]),
     block("c-reset", "Reset pós-bike", "warmup", [resetBlock("c-reset-pos-bike")]),
     block("c-mobilidade", "Mobilidade Pré-Musculação", "mobility", commonMobility),
-    block("c-base-corporal", "Base Corporal de Ativação", "base_body", commonBaseBody),
+    block("c-base-corporal", "Base Corporal de Ativação", "base_body", strengthBaseBody),
     block("c-aquecimento-especifico", "Aquecimento Específico", "warmup", [
       skill({
         id: "c-dobradica-sem-carga",
@@ -1404,6 +1615,7 @@ const treinoC: Workout = {
       }),
       strength({
         id: "remada-baixa-triangulo",
+        legacyIds: ["remada-baixa"],
         displayName: "Remada Baixa Triângulo",
         type: "strength",
         priority: "base",
@@ -1711,6 +1923,8 @@ const capoeira: Workout = {
   type: "capoeira",
   modality: "capoeira",
   cycleOrder: 6,
+  sameDayGroupId: "sabado-capoeira-danca",
+  groupOrder: 1,
   active: true,
   note:
     "A capoeira usa biblioteca própria de 50 movimentos. O app escolhe revisões por status, dificuldade e data de última revisão.",
@@ -1726,18 +1940,7 @@ const capoeira: Workout = {
       }),
     ]),
     block("capoeira-base", "Base Corporal e Isometria", "base_body", [
-      timed({
-        id: "capoeira-postura-cavalo",
-        displayName: "Postura do Cavalo",
-        type: "base_body",
-        kind: "core",
-        priority: "base",
-        durationSec: 30,
-        metricSchema: ["durationSec", "quality1to5", "completed"],
-        progressionModel: "time_progression",
-        referenceSearchQuery: "Postura do Cavalo capoeira Mestre Koioty",
-        note: "Revisar 2-3x por semana.",
-      }),
+      ...capoeiraBaseBody,
       skill({
         id: "capoeira-esquiva-lateral",
         displayName: "Esquiva lateral",
@@ -1810,6 +2013,8 @@ const danca: Workout = {
   type: "dance",
   modality: "dance",
   cycleOrder: 7,
+  sameDayGroupId: "sabado-capoeira-danca",
+  groupOrder: 2,
   active: true,
   note:
     "A progressão do curso fica no Steezy. O app registra execução, consistência, fluidez, memória, repetição e notas.",
@@ -1872,7 +2077,7 @@ const domingo: Workout = {
     block("domingo-capoeira-leve", "Revisão Leve de Capoeira opcional", "review", [
       skill({
         id: "domingo-ginga-leve",
-        displayName: "Ginga leve",
+        displayName: "Ginga",
         type: "capoeira_movement",
         kind: "capoeira_movement",
         priority: "review",

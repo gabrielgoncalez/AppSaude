@@ -94,6 +94,34 @@ export type ReferenceLink = {
   url: string;
 };
 
+export type BlockMode =
+  | "checklist"
+  | "timer"
+  | "sets"
+  | "rounds"
+  | "test"
+  | "external";
+
+export type TechnicalMetricValue = number | string | boolean | undefined;
+
+export type TechnicalItemLog = {
+  itemId: string;
+  itemName: string;
+  completed: boolean;
+  completedAt?: string;
+  metricValues?: Record<string, TechnicalMetricValue>;
+  technicalRatings?: Record<string, 1 | 2 | 3 | 4 | 5>;
+  notes?: string;
+};
+
+export type TechnicalBlockLog = {
+  blockId: string;
+  blockName: string;
+  completed: boolean;
+  completedAt?: string;
+  items: TechnicalItemLog[];
+};
+
 export type WaveSlot = "volume" | "volume_2" | "strength" | "consolidation";
 
 export type ExerciseVariantRole =
@@ -106,6 +134,7 @@ export type ExerciseVariantRole =
 
 export type Exercise = {
   id: string;
+  legacyIds?: string[];
   name: string;
   displayName?: string;
   type: ExerciseType;
@@ -155,8 +184,10 @@ export type WorkoutBlock = {
     | "rounds"
     | "core"
     | "cooldown"
-    | "test"
-    | "review";
+      | "test"
+      | "review";
+  blockMode?: BlockMode;
+  required?: boolean;
   items: Exercise[];
 };
 
@@ -175,6 +206,8 @@ export type Workout = {
     | "recovery"
     | "hybrid";
   cycleOrder?: number;
+  sameDayGroupId?: string;
+  groupOrder?: number;
   active?: boolean;
   exercises?: Exercise[];
   workoutBlocks?: WorkoutBlock[];
@@ -234,6 +267,9 @@ export type TrainingSession = {
   planId?: string;
   planVersion?: number;
   exercises: ExerciseLog[];
+  completedBlocks?: string[];
+  completedItems?: string[];
+  technicalBlocks?: TechnicalBlockLog[];
   earnedXp: number;
   earnedCoins?: number;
   prBonusXp?: number;
@@ -249,5 +285,8 @@ export type SkillWorkoutMetrics = {
   quality1to5?: 1 | 2 | 3 | 4 | 5;
   cleanStreakSec?: number;
   technicalRatings?: Record<string, 1 | 2 | 3 | 4 | 5>;
+  completedBlocks?: string[];
+  completedItems?: string[];
+  technicalBlocks?: TechnicalBlockLog[];
   notes?: string;
 };

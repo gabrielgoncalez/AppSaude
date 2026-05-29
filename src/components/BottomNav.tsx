@@ -1,12 +1,13 @@
 import {
   CalendarDays,
   ChartNoAxesColumn,
+  CircleDot,
   Dumbbell,
   Gift,
   HardDriveDownload,
 } from "lucide-react";
 
-export type ViewId = "hoje" | "plano" | "evolucao" | "recompensas" | "backup";
+export type ViewId = "hoje" | "plano" | "evolucao" | "capoeira" | "recompensas" | "backup";
 
 type BottomNavProps = {
   current: ViewId;
@@ -16,6 +17,7 @@ type BottomNavProps = {
 const items = [
   { id: "hoje", label: "Hoje", icon: Dumbbell },
   { id: "plano", label: "Plano", icon: CalendarDays },
+  { id: "capoeira", label: "Capoeira", icon: CircleDot },
   { id: "evolucao", label: "Evolução", icon: ChartNoAxesColumn },
   { id: "recompensas", label: "Recompensas", icon: Gift },
   { id: "backup", label: "Backup", icon: HardDriveDownload },
@@ -24,7 +26,7 @@ const items = [
 export function BottomNav({ current, onNavigate }: BottomNavProps) {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-800 bg-slate-950/95 px-2 pb-[max(0.65rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur">
-      <div className="mx-auto grid max-w-4xl grid-cols-5 gap-1">
+      <div className="mx-auto grid max-w-4xl grid-cols-6 gap-1">
         {items.map((item) => {
           const Icon = item.icon;
           const active = current === item.id;

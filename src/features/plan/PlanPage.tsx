@@ -15,14 +15,29 @@ import { useRef, useState } from "react";
 import { Button } from "../../components/Button";
 import { Card } from "../../components/Card";
 import { formatDayName } from "../../lib/dates";
+import type { AppData } from "../../types/appData";
 import type { Exercise, ExerciseType, TrainingPlan, Workout } from "../../types/training";
 
 type PlanPageProps = {
+  data: AppData;
   plan: TrainingPlan;
   onUpdatePlan: (plan: TrainingPlan) => void;
+  onImportMasterConfig: (config: MasterConfig) => void;
 };
 
-export function PlanPage({ plan, onUpdatePlan }: PlanPageProps) {
+export type MasterConfig = {
+  app: "gigante-agil";
+  type: "master-config";
+  exportedAt: string;
+  plan: TrainingPlan;
+  capoeiraMovements?: AppData["capoeiraMovements"];
+  trainingPhases?: AppData["trainingPhases"];
+  bodyGoals?: AppData["bodyGoals"];
+  rewards?: AppData["rewards"];
+  achievements?: AppData["achievements"];
+};
+
+export function PlanPage({ data, plan, onUpdatePlan, onImportMasterConfig }: PlanPageProps) {
   const [editing, setEditing] = useState(false);
   const [pendingPlan, setPendingPlan] = useState<TrainingPlan | undefined>();
   const [importError, setImportError] = useState("");
@@ -31,6 +46,7 @@ export function PlanPage({ plan, onUpdatePlan }: PlanPageProps) {
 
   function updateWorkout(updated: Workout) {
     onUpdatePlan({
+      ...plan,
       workouts: plan.workouts.map((workout) =>
         workout.id === updated.id ? updated : workout,
       ),
@@ -42,6 +58,20 @@ export function PlanPage({ plan, onUpdatePlan }: PlanPageProps) {
       ...workout,
       exercises: (workout.exercises ?? []).map((exercise) =>
         exercise.id === updated.id ? updated : exercise,
+      ),
+    });
+  }
+
+  function updateBlockItem(workout: Workout, blockId: string, updated: Exercise) {
+    updateWorkout({
+      ...workout,
+      workoutBlocks: (workout.workoutBlocks ?? []).map((block) =>
+        block.id === blockId
+          ? {
+              ...block,
+              items: block.items.map((item) => (item.id === updated.id ? updated : item)),
+            }
+          : block,
       ),
     });
   }
@@ -95,6 +125,29 @@ export function PlanPage({ plan, onUpdatePlan }: PlanPageProps) {
     URL.revokeObjectURL(url);
   }
 
+  function exportMasterConfig() {
+    const config: MasterConfig = {
+      app: "gigante-agil",
+      type: "master-config",
+      exportedAt: new Date().toISOString(),
+      plan,
+      capoeiraMovements: data.capoeiraMovements,
+      trainingPhases: data.trainingPhases,
+      bodyGoals: data.bodyGoals,
+      rewards: data.rewards,
+      achievements: data.achievements,
+    };
+    const blob = new Blob([JSON.stringify(config, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `gigante-agil-master-config-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   async function importPlan(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) {
@@ -103,7 +156,13 @@ export function PlanPage({ plan, onUpdatePlan }: PlanPageProps) {
 
     try {
       const raw = await file.text();
-      const parsed = JSON.parse(raw) as { plan?: TrainingPlan; trainingPlan?: TrainingPlan };
+      const parsed = JSON.parse(raw) as { plan?: TrainingPlan; trainingPlan?: TrainingPlan; type?: string };
+      if (parsed.type === "master-config" && parsed.plan?.workouts?.length) {
+        onImportMasterConfig(parsed as MasterConfig);
+        setImportError("");
+        setPendingPlan(undefined);
+        return;
+      }
       const nextPlan = parsed.plan ?? parsed.trainingPlan;
       if (!nextPlan?.workouts?.length) {
         throw new Error("Plano inválido.");
@@ -144,6 +203,9 @@ export function PlanPage({ plan, onUpdatePlan }: PlanPageProps) {
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           <Button icon={<Download size={18} />} onClick={exportPlan} variant="secondary">
             Exportar plano
+          </Button>
+          <Button icon={<Download size={18} />} onClick={exportMasterConfig} variant="secondary">
+            Exportar master-config
           </Button>
           <Button
             icon={<Upload size={18} />}
@@ -226,6 +288,20 @@ export function PlanPage({ plan, onUpdatePlan }: PlanPageProps) {
                         <span className="text-xs text-slate-500">
                           {item.targetSets}x · {item.durationSec ? `${item.durationSec}s` : item.repMin && item.repMax ? `${item.repMin}-${item.repMax}` : item.kind ?? item.type}
                         </span>
+                        {editing ? (
+                          <button
+                            className="rounded-md border border-slate-700 px-2 py-1 text-xs font-bold text-slate-300"
+                            onClick={() =>
+                              updateBlockItem(workout, block.id, {
+                                ...item,
+                                active: item.active === false,
+                              })
+                            }
+                            type="button"
+                          >
+                            {item.active === false ? "Ativar" : "Desativar"}
+                          </button>
+                        ) : null}
                       </div>
                     ))}
                   </div>

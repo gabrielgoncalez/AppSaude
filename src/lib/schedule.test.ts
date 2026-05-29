@@ -4,6 +4,7 @@ import {
   completeWorkoutDay,
   getDayEvent,
   getNextCycleWorkoutAfter,
+  getTodayWorkout,
   markRecoveryRest,
   resolvePendingDays,
   selectWorkoutForToday,
@@ -160,5 +161,26 @@ describe("schedule", () => {
       status: "selected",
       workoutId: "boxe",
     });
+  });
+
+  it("sabado composto permite parcial e so avanca depois de capoeira e danca", () => {
+    const data = createInitialAppData(new Date("2026-05-30T10:00:00"));
+    const capoeira = data.trainingPlan.workouts.find((item) => item.id === "capoeira")!;
+    const danca = data.trainingPlan.workouts.find((item) => item.id === "danca")!;
+
+    const partial = completeWorkoutDay(data, capoeira, new Date("2026-05-30T10:00:00"));
+    expect(partial.schedule.activeWorkoutId).toBe("danca");
+    expect(partial.schedule.todayStatus).toBe("partial");
+    expect(getDayEvent(partial, new Date("2026-05-30T10:00:00"))?.groupParts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ workoutId: "capoeira", status: "completed" }),
+        expect.objectContaining({ workoutId: "danca", status: "selected" }),
+      ]),
+    );
+    expect(getTodayWorkout(partial, new Date("2026-05-30T10:00:00")).id).toBe("danca");
+
+    const completed = completeWorkoutDay(partial, danca, new Date("2026-05-30T11:00:00"));
+    expect(completed.schedule.todayStatus).toBe("completed");
+    expect(completed.schedule.activeWorkoutId).toBe("treino-a");
   });
 });

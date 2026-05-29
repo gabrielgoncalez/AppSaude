@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { TrainingPlan } from "../types/training";
+import { createInitialAppData } from "../data/createInitialAppData";
 import { normalizeTrainingPlanForWave } from "./trainingPlan";
 
 describe("trainingPlan", () => {
@@ -42,5 +43,15 @@ describe("trainingPlan", () => {
       repMax: 15,
     });
     expect(normalized.workouts[0].exercises?.[1].durationSec).toBe(30);
+  });
+
+  it("mantem workout.exercises derivado do bloco Musculacao Principal", () => {
+    const data = createInitialAppData(new Date("2026-05-25T10:00:00.000Z"));
+    const workout = data.trainingPlan.workouts.find((item) => item.id === "treino-a");
+    const strengthBlock = workout?.workoutBlocks?.find((block) => block.id === "a-musculacao");
+
+    expect(workout?.exercises?.map((item) => item.id)).toEqual(
+      strengthBlock?.items.map((item) => item.id),
+    );
   });
 });

@@ -25,7 +25,7 @@ import {
 } from "../../lib/gamification";
 import { getMonthlyCommitmentSummary } from "../../lib/penaltyEngine";
 import { getCurrentPhaseReading } from "../../lib/phaseEngine";
-import { getCycleWorkouts } from "../../lib/schedule";
+import { getCycleWorkouts, getWorkoutGroup } from "../../lib/schedule";
 import { getTrainingInsights, type TrainingInsight } from "../../lib/trainingInsights";
 import type { AppData, DayEvent } from "../../types/appData";
 import type { Workout } from "../../types/training";
@@ -71,6 +71,11 @@ export function DashboardPage({
   const canChangeWorkout = !todayCompleted && !recoveryMarked;
   const canRest = !todayCompleted && !recoveryMarked;
   const insights = getTrainingInsights(data);
+  const group = getWorkoutGroup(data.trainingPlan, workout);
+  const selectorWorkouts = cycleWorkouts.some((candidate) => candidate.id === workout.id)
+    ? cycleWorkouts
+    : [...cycleWorkouts, workout];
+  const visibleBlocks = workout.workoutBlocks?.slice(0, 6) ?? [];
 
   return (
     <div className="space-y-4">
@@ -80,7 +85,11 @@ export function DashboardPage({
             <p className="text-sm font-bold uppercase tracking-wide text-teal-300">
               Missão de hoje
             </p>
-            <h2 className="mt-1 text-2xl font-black text-white">{workout.name}</h2>
+            <h2 className="mt-1 text-2xl font-black text-white">
+              {group.length > 1
+                ? group.map((part) => part.name.split(" - ")[0]).join(" + ")
+                : workout.name}
+            </h2>
             <p className="mt-2 text-slate-300">
               Carga limpa, repetições honestas e sem pressa.
             </p>
@@ -111,7 +120,7 @@ export function DashboardPage({
               onChange={(event) => onSelectTodayWorkout(event.target.value)}
               value={workout.id}
             >
-              {cycleWorkouts.map((candidate) => (
+              {selectorWorkouts.map((candidate) => (
                 <option key={candidate.id} value={candidate.id}>
                   {candidate.name}
                 </option>
@@ -136,7 +145,47 @@ export function DashboardPage({
             Status de hoje: {getDayEventLabel(dayEvent)}
           </p>
         ) : null}
+
+        {group.length > 1 ? (
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {group.map((part) => {
+              const partStatus = dayEvent?.groupParts?.find(
+                (item) => item.workoutId === part.id,
+              )?.status;
+              return (
+                <div
+                  className="rounded-md border border-slate-800 bg-slate-950 px-3 py-2"
+                  key={part.id}
+                >
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                    Parte do sábado
+                  </p>
+                  <p className="mt-1 font-black text-white">{part.name}</p>
+                  <p className="mt-1 text-sm text-teal-200">
+                    {partStatus === "completed" ? "concluída" : "pendente"}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
       </Card>
+
+      {visibleBlocks.length ? (
+        <Card>
+          <h3 className="text-lg font-black text-white">Cockpit do dia</h3>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {visibleBlocks.map((block) => (
+              <div className="rounded-md bg-slate-950 px-3 py-2" key={block.id}>
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                  {block.blockMode ?? "checklist"} {block.required ? "· essencial" : "· apoio"}
+                </p>
+                <p className="mt-1 font-bold text-slate-100">{block.name}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : null}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatCard
@@ -303,6 +352,9 @@ function AgendaInsight({ insight }: { insight: TrainingInsight }) {
 }
 
 function getDayEventLabel(event: DayEvent): string {
+  if (event.status === "partial") {
+    return "missao composta parcial";
+  }
   if (event.status === "completed") {
     return "missão concluída";
   }

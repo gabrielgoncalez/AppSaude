@@ -4,10 +4,11 @@ import type { ViewId } from "./components/BottomNav";
 import { DEFAULT_ACHIEVEMENTS } from "./data/achievements";
 import { LoginPage } from "./features/auth/LoginPage";
 import { BackupPage } from "./features/backup/BackupPage";
+import { CapoeiraPage } from "./features/capoeira/CapoeiraPage";
 import { CheckinPage } from "./features/checkins/CheckinPage";
 import { DashboardPage } from "./features/dashboard/DashboardPage";
 import { OnboardingPage } from "./features/onboarding/OnboardingPage";
-import { PlanPage } from "./features/plan/PlanPage";
+import { PlanPage, type MasterConfig } from "./features/plan/PlanPage";
 import { ProgressPage } from "./features/progress/ProgressPage";
 import { RewardsPage } from "./features/rewards/RewardsPage";
 import { PostWorkoutSummary } from "./features/today/PostWorkoutSummary";
@@ -35,6 +36,7 @@ import {
 import { buildWorkoutSummary, type WorkoutSummary } from "./lib/postWorkout";
 import { getPrBonus } from "./lib/progressionEngine";
 import { getTodayPrescription } from "./lib/prescriptionEngine";
+import type { PrescribedBlock } from "./lib/prescriptionEngine";
 import { normalizeAppDataForWave } from "./lib/trainingPlan";
 import {
   signInWithGoogle,
@@ -67,6 +69,7 @@ const routes: Record<ViewId, string> = {
   hoje: "/",
   plano: "/plano",
   evolucao: "/evolucao",
+  capoeira: "/capoeira",
   recompensas: "/recompensas",
   backup: "/backup",
 };
@@ -77,6 +80,9 @@ function viewFromPath(pathname: string): ViewId | "checkin" {
   }
   if (pathname.startsWith("/evolucao")) {
     return "evolucao";
+  }
+  if (pathname.startsWith("/capoeira")) {
+    return "capoeira";
   }
   if (pathname.startsWith("/recompensas")) {
     return "recompensas";
@@ -214,7 +220,7 @@ export default function App() {
         return undefined;
       }
 
-      if (dayEvent?.status === "completed") {
+      if (dayEvent?.status === "completed" || dayEvent?.status === "partial") {
         return (
           data.trainingPlan.workouts.find(
             (candidate) => candidate.id === data.schedule.activeWorkoutId,
@@ -359,6 +365,36 @@ export default function App() {
     }));
   }
 
+  function completeChecklistItem(block: PrescribedBlock, item: Exercise) {
+    setWorkoutSummary(undefined);
+    updateTodaySession((session) => {
+      const completedItems = toggleUnique(session.completedItems ?? [], item.id);
+      const blockItemIds = block.items.map((candidate) => candidate.exercise.id);
+      const blockCompleted = blockItemIds.every((id) => completedItems.includes(id));
+      return {
+        ...session,
+        status: "partial",
+        completedItems,
+        completedBlocks: blockCompleted
+          ? unique([...(session.completedBlocks ?? []), block.id])
+          : (session.completedBlocks ?? []).filter((id) => id !== block.id),
+      };
+    });
+  }
+
+  function completeChecklistBlock(block: PrescribedBlock) {
+    setWorkoutSummary(undefined);
+    updateTodaySession((session) => ({
+      ...session,
+      status: "partial",
+      completedBlocks: unique([...(session.completedBlocks ?? []), block.id]),
+      completedItems: unique([
+        ...(session.completedItems ?? []),
+        ...block.items.map((item) => item.exercise.id),
+      ]),
+    }));
+  }
+
   function completeWorkout() {
     if (!data || !workout) {
       return;
@@ -411,6 +447,9 @@ export default function App() {
         durationMin: metrics.durationMin ?? current.durationMin,
         notes: metrics.notes ?? current.notes,
         status: "completed",
+        completedBlocks: metrics.completedBlocks ?? current.completedBlocks,
+        completedItems: metrics.completedItems ?? current.completedItems,
+        technicalBlocks: metrics.technicalBlocks ?? current.technicalBlocks,
         exercises: [
           ...current.exercises.filter(
             (exercise) => exercise.exerciseId !== technicalLog.exerciseId,
@@ -472,6 +511,30 @@ export default function App() {
       },
     ].slice(-10);
     commit(ensureSchedule({ ...data, trainingPlan, trainingPlanHistory: history }));
+  }
+
+  function updateCapoeiraMovements(movements: NonNullable<AppData["capoeiraMovements"]>) {
+    if (!data) {
+      return;
+    }
+    commit({ ...data, capoeiraMovements: movements });
+  }
+
+  function importMasterConfig(config: MasterConfig) {
+    if (!data) {
+      return;
+    }
+    commit(
+      ensureSchedule({
+        ...data,
+        trainingPlan: config.plan,
+        capoeiraMovements: config.capoeiraMovements ?? data.capoeiraMovements,
+        trainingPhases: config.trainingPhases ?? data.trainingPhases,
+        bodyGoals: config.bodyGoals ?? data.bodyGoals,
+        rewards: config.rewards ?? data.rewards,
+        achievements: config.achievements ?? data.achievements,
+      }),
+    );
   }
 
   function saveCheckin(checkin: BodyCheckin) {
@@ -647,6 +710,8 @@ export default function App() {
           ) : (
             <TodayWorkoutPage
               onAddSet={addSet}
+              onCompleteChecklistBlock={completeChecklistBlock}
+              onCompleteChecklistItem={completeChecklistItem}
               onCompleteSkillWorkout={completeSkillWorkout}
               onCompleteWorkout={completeWorkout}
               onFinishExerciseSet={finishExerciseSet}
@@ -660,9 +725,20 @@ export default function App() {
         </div>
       ) : null}
       {view === "plano" ? (
-        <PlanPage onUpdatePlan={updatePlan} plan={data.trainingPlan} />
+        <PlanPage
+          data={data}
+          onImportMasterConfig={importMasterConfig}
+          onUpdatePlan={updatePlan}
+          plan={data.trainingPlan}
+        />
       ) : null}
       {view === "evolucao" ? <ProgressPage data={data} /> : null}
+      {view === "capoeira" ? (
+        <CapoeiraPage
+          movements={data.capoeiraMovements ?? []}
+          onUpdate={updateCapoeiraMovements}
+        />
+      ) : null}
       {view === "recompensas" ? (
         <RewardsPage
           data={data}
@@ -772,6 +848,16 @@ function withRecalculatedXp(
     prBonusXp: prBonus,
     prBonusCoins: prBonus,
   };
+}
+
+function unique<T>(items: T[]): T[] {
+  return [...new Set(items)];
+}
+
+function toggleUnique(items: string[], item: string): string[] {
+  return items.includes(item)
+    ? items.filter((candidate) => candidate !== item)
+    : [...items, item];
 }
 
 function isCloudSnapshotOlderThanPending(

@@ -65,6 +65,7 @@ export type ScheduleState = {
 
 export type DayEventStatus =
   | "selected"
+  | "partial"
   | "completed"
   | "recovery_rest"
   | "missed"
@@ -72,11 +73,20 @@ export type DayEventStatus =
 
 export type PenaltyKind = "recovery_rest" | "missed";
 
+export type DayEventPart = {
+  workoutId: string;
+  workoutName: string;
+  status: Exclude<DayEventStatus, "planned_rest">;
+  completedAt?: string;
+};
+
 export type DayEvent = {
   id: string;
   date: string;
   workoutId: string;
   workoutName: string;
+  sameDayGroupId?: string;
+  groupParts?: DayEventPart[];
   status: DayEventStatus;
   scheduleRevision?: number;
   penaltyXp: number;

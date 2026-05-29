@@ -3,7 +3,13 @@ import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { Button } from "../../components/Button";
 import { Card } from "../../components/Card";
-import type { Exercise, SkillWorkoutMetrics, Workout, WorkoutBlock } from "../../types/training";
+import type {
+  Exercise,
+  SkillWorkoutMetrics,
+  TechnicalBlockLog,
+  Workout,
+  WorkoutBlock,
+} from "../../types/training";
 
 type SkillWorkoutLoggerProps = {
   workout: Workout;
@@ -21,6 +27,8 @@ type MetricKey =
 export function SkillWorkoutLogger({ workout, onComplete }: SkillWorkoutLoggerProps) {
   const [metrics, setMetrics] = useState<SkillWorkoutMetrics>(() => getInitialMetrics(workout.id));
   const [blockState, setBlockState] = useState({ index: 0, workoutId: workout.id });
+  const [completedBlockIds, setCompletedBlockIds] = useState<string[]>([]);
+  const [completedItemIds, setCompletedItemIds] = useState<string[]>([]);
   const labels = useMemo(() => getTechnicalLabels(workout.id), [workout.id]);
   const activeBlockIndex = blockState.workoutId === workout.id ? blockState.index : 0;
 
@@ -47,7 +55,22 @@ export function SkillWorkoutLogger({ workout, onComplete }: SkillWorkoutLoggerPr
         <h2 className="mt-1 text-2xl font-black text-white">{workout.name}</h2>
         <TechnicalWorkoutFocus
           activeBlockIndex={activeBlockIndex}
+          completedBlockIds={completedBlockIds}
+          completedItemIds={completedItemIds}
           onChangeBlock={(index) => setBlockState({ index, workoutId: workout.id })}
+          onCompleteBlock={(block) => {
+            setCompletedBlockIds((current) => unique([...current, block.id]));
+            setCompletedItemIds((current) =>
+              unique([...current, ...block.items.map((item) => item.id)]),
+            );
+          }}
+          onToggleItem={(itemId) =>
+            setCompletedItemIds((current) =>
+              current.includes(itemId)
+                ? current.filter((item) => item !== itemId)
+                : [...current, itemId],
+            )
+          }
           workout={workout}
         />
       </Card>
@@ -97,7 +120,28 @@ export function SkillWorkoutLogger({ workout, onComplete }: SkillWorkoutLoggerPr
         <Button
           className="mt-5 w-full py-4"
           icon={<CheckCircle2 size={18} />}
-          onClick={() => onComplete(metrics)}
+          onClick={() =>
+            onComplete({
+              ...metrics,
+              completedBlocks: unique([
+                ...completedBlockIds,
+                ...(workout.workoutBlocks ?? []).map((block) => block.id),
+              ]),
+              completedItems: unique([
+                ...completedItemIds,
+                ...(workout.workoutBlocks ?? []).flatMap((block) =>
+                  block.items
+                    .filter((item) => item.active !== false && item.phaseAvailability !== "future")
+                    .map((item) => item.id),
+                ),
+              ]),
+              technicalBlocks: buildTechnicalBlocks(workout, metrics, {
+                completedBlockIds,
+                completedItemIds,
+                completeAll: true,
+              }),
+            })
+          }
         >
           Concluir missão
         </Button>
@@ -109,11 +153,19 @@ export function SkillWorkoutLogger({ workout, onComplete }: SkillWorkoutLoggerPr
 function TechnicalWorkoutFocus({
   workout,
   activeBlockIndex,
+  completedBlockIds,
+  completedItemIds,
   onChangeBlock,
+  onCompleteBlock,
+  onToggleItem,
 }: {
   workout: Workout;
   activeBlockIndex: number;
+  completedBlockIds: string[];
+  completedItemIds: string[];
   onChangeBlock: (index: number) => void;
+  onCompleteBlock: (block: WorkoutBlock) => void;
+  onToggleItem: (itemId: string) => void;
 }) {
   if (workout.workoutBlocks?.length) {
     const blocks = workout.workoutBlocks;
@@ -163,7 +215,12 @@ function TechnicalWorkoutFocus({
 
           <div className="mt-3 grid gap-2">
             {currentBlock.items.map((item) => (
-              <TechnicalItemRow item={item} key={item.id} />
+              <TechnicalItemRow
+                completed={completedItemIds.includes(item.id)}
+                item={item}
+                key={item.id}
+                onToggle={() => onToggleItem(item.id)}
+              />
             ))}
           </div>
 
@@ -171,10 +228,15 @@ function TechnicalWorkoutFocus({
             className="mt-4 w-full"
             disabled={safeIndex >= blocks.length - 1}
             icon={<CheckCircle2 size={18} />}
-            onClick={() => onChangeBlock(Math.min(blocks.length - 1, safeIndex + 1))}
+            onClick={() => {
+              onCompleteBlock(currentBlock);
+              onChangeBlock(Math.min(blocks.length - 1, safeIndex + 1));
+            }}
             variant={safeIndex >= blocks.length - 1 ? "secondary" : "primary"}
           >
-            {safeIndex >= blocks.length - 1 ? "Último bloco aberto" : "Finalizar bloco"}
+            {completedBlockIds.includes(currentBlock.id)
+              ? "Bloco finalizado"
+              : "Finalizar bloco"}
           </Button>
         </div>
 
@@ -233,10 +295,22 @@ function TechnicalWorkoutFocus({
   );
 }
 
-function TechnicalItemRow({ item }: { item: Exercise }) {
+function TechnicalItemRow({
+  item,
+  completed,
+  onToggle,
+}: {
+  item: Exercise;
+  completed: boolean;
+  onToggle: () => void;
+}) {
   const name = item.displayName ?? item.name;
   return (
-    <div className="flex items-center justify-between gap-3 rounded-md border border-slate-800 bg-slate-950 px-3 py-3">
+    <div
+      className={`flex items-center justify-between gap-3 rounded-md border px-3 py-3 ${
+        completed ? "border-teal-400/30 bg-teal-400/10" : "border-slate-800 bg-slate-950"
+      }`}
+    >
       <div className="min-w-0">
         <p className="font-black text-white">{name}</p>
         <p className="mt-1 text-xs font-bold uppercase tracking-wide text-slate-400">
@@ -254,6 +328,15 @@ function TechnicalItemRow({ item }: { item: Exercise }) {
         type="button"
       >
         <Search size={16} />
+      </button>
+      <button
+        aria-label={completed ? `Desmarcar ${name}` : `Marcar ${name} como feito`}
+        className="tap-target inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-700 text-slate-300 transition hover:border-teal-300 hover:text-teal-200"
+        onClick={onToggle}
+        title={completed ? "Desmarcar" : "Marcar feito"}
+        type="button"
+      >
+        <CheckCircle2 size={16} />
       </button>
     </div>
   );
@@ -352,7 +435,7 @@ function getInitialMetrics(workoutId: string): SkillWorkoutMetrics {
       rounds: 5,
       hits: 0,
       attempts: 50,
-      technicalRatings: { guarda: 3, base: 3, respiracao: 3 },
+      technicalRatings: { boxing_guard: 3, boxing_base: 3, boxing_breathing: 3 },
     };
   }
 
@@ -361,7 +444,11 @@ function getInitialMetrics(workoutId: string): SkillWorkoutMetrics {
       durationMin: 20,
       errors: 0,
       cleanStreakSec: 30,
-      technicalRatings: { olhos: 3, mao_fraca: 3, controle_corporal: 3 },
+      technicalRatings: {
+        basketball_eyes_up: 3,
+        basketball_weak_hand: 3,
+        basketball_body_control: 3,
+      },
     };
   }
 
@@ -370,7 +457,7 @@ function getInitialMetrics(workoutId: string): SkillWorkoutMetrics {
       durationMin: 30,
       rounds: 1,
       quality1to5: 3,
-      technicalRatings: { confianca: 3, fluidez: 3, memoria: 3 },
+      technicalRatings: { dance_confidence: 3, dance_fluency: 3, dance_memory: 3 },
     };
   }
 
@@ -378,7 +465,7 @@ function getInitialMetrics(workoutId: string): SkillWorkoutMetrics {
     return {
       durationMin: 30,
       quality1to5: 3,
-      technicalRatings: { base: 3, controle: 3, fluidez: 3 },
+      technicalRatings: { capoeira_quality: 3, capoeira_control: 3, capoeira_fluency: 3 },
     };
   }
 
@@ -394,9 +481,9 @@ function getTechnicalLabels(workoutId: string) {
         { key: "attempts" as const, label: "Tentativas", suffix: "" },
       ],
       ratingFields: [
-        { key: "guarda", label: "Guarda" },
-        { key: "base", label: "Base" },
-        { key: "respiracao", label: "Respiração" },
+        { key: "boxing_guard", label: "Guarda" },
+        { key: "boxing_base", label: "Base" },
+        { key: "boxing_breathing", label: "Respiração" },
       ],
     };
   }
@@ -409,9 +496,9 @@ function getTechnicalLabels(workoutId: string) {
         { key: "cleanStreakSec" as const, label: "Sequência limpa", suffix: "s" },
       ],
       ratingFields: [
-        { key: "olhos", label: "Olhos para cima" },
-        { key: "mao_fraca", label: "Mão fraca" },
-        { key: "controle_corporal", label: "Controle corporal" },
+        { key: "basketball_eyes_up", label: "Olhos para cima" },
+        { key: "basketball_weak_hand", label: "Mão fraca" },
+        { key: "basketball_body_control", label: "Controle corporal" },
       ],
     };
   }
@@ -423,9 +510,9 @@ function getTechnicalLabels(workoutId: string) {
         { key: "rounds" as const, label: "Coreografia", suffix: "x" },
       ],
       ratingFields: [
-        { key: "confianca", label: "Confiança" },
-        { key: "fluidez", label: "Fluidez" },
-        { key: "memoria", label: "Memória" },
+        { key: "dance_confidence", label: "Confiança" },
+        { key: "dance_fluency", label: "Fluidez" },
+        { key: "dance_memory", label: "Memória" },
       ],
     };
   }
@@ -434,17 +521,70 @@ function getTechnicalLabels(workoutId: string) {
     return {
       numberFields: [{ key: "durationMin" as const, label: "Duração", suffix: "min" }],
       ratingFields: [
-        { key: "base", label: "Base" },
-        { key: "controle", label: "Controle" },
-        { key: "fluidez", label: "Fluidez" },
+        { key: "capoeira_quality", label: "Qualidade" },
+        { key: "capoeira_control", label: "Controle" },
+        { key: "capoeira_fluency", label: "Fluidez" },
       ],
     };
   }
 
   return {
     numberFields: [{ key: "durationMin" as const, label: "Duração", suffix: "min" }],
-    ratingFields: [{ key: "qualidade", label: "Qualidade" }],
+    ratingFields: [{ key: "quality", label: "Qualidade" }],
   };
+}
+
+function buildTechnicalBlocks(
+  workout: Workout,
+  metrics: SkillWorkoutMetrics,
+  state: {
+    completedBlockIds: string[];
+    completedItemIds: string[];
+    completeAll: boolean;
+  },
+): TechnicalBlockLog[] {
+  const completedAt = new Date().toISOString();
+  return (workout.workoutBlocks ?? []).map((block) => {
+    const blockCompleted = state.completeAll || state.completedBlockIds.includes(block.id);
+    const isTestBlock = block.blockMode === "test" || block.type === "test";
+    const items = block.items
+      .filter((item) => item.active !== false && item.phaseAvailability !== "future")
+      .map((item) => {
+        const completed =
+          blockCompleted || state.completeAll || state.completedItemIds.includes(item.id);
+        return {
+          itemId: item.id,
+          itemName: item.displayName ?? item.name,
+          completed,
+          completedAt: completed ? completedAt : undefined,
+          metricValues: isTestBlock
+            ? {
+                durationMin: metrics.durationMin,
+                rounds: metrics.rounds,
+                errors: metrics.errors,
+                hits: metrics.hits,
+                attempts: metrics.attempts,
+                cleanStreakSec: metrics.cleanStreakSec,
+                quality1to5: metrics.quality1to5,
+              }
+            : undefined,
+          technicalRatings: isTestBlock ? metrics.technicalRatings : undefined,
+          notes: isTestBlock ? metrics.notes : undefined,
+        };
+      });
+
+    return {
+      blockId: block.id,
+      blockName: block.name,
+      completed: blockCompleted,
+      completedAt: blockCompleted ? completedAt : undefined,
+      items,
+    };
+  });
+}
+
+function unique<T>(items: T[]): T[] {
+  return [...new Set(items)];
 }
 
 type NumberFieldProps = {

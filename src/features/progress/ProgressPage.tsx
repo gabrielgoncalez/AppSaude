@@ -67,6 +67,7 @@ export function ProgressPage({ data }: ProgressPageProps) {
     : undefined;
   const prs = getRecentPrs(data.sessions);
   const bodyRoute = getBodyRouteStatus(data);
+  const technical = getTechnicalSummary(data);
 
   return (
     <div className="space-y-4">
@@ -238,6 +239,16 @@ export function ProgressPage({ data }: ProgressPageProps) {
       </Card>
 
       <Card>
+        <h3 className="text-lg font-black text-white">Evolução técnica</h3>
+        <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
+          <Metric label="Basquete" value={technical.basketball} />
+          <Metric label="Boxe" value={technical.boxing} />
+          <Metric label="Capoeira" value={technical.capoeira} />
+          <Metric label="Dança" value={technical.dance} />
+        </div>
+      </Card>
+
+      <Card>
         <h3 className="text-lg font-black text-white">PRs recentes</h3>
         {prs.length ? (
           <div className="mt-3 grid gap-2">
@@ -294,4 +305,25 @@ function formatCm(value?: number): string {
     return "-";
   }
   return `${value > 0 ? "+" : ""}${value.toFixed(1)} cm`;
+}
+
+function getTechnicalSummary(data: AppData) {
+  const technicalSessions = data.sessions.filter(
+    (session) => session.technicalBlocks?.length || !session.workoutId.startsWith("treino-"),
+  );
+  const count = (workoutId: string) =>
+    technicalSessions.filter((session) => session.workoutId === workoutId).length;
+  const capoeiraMastered = data.capoeiraMovements?.filter(
+    (movement) => movement.status === "mastered",
+  ).length ?? 0;
+  const capoeiraValidating = data.capoeiraMovements?.filter(
+    (movement) => movement.status === "validating",
+  ).length ?? 0;
+
+  return {
+    basketball: `${count("basquete-handles")} sessões`,
+    boxing: `${count("boxe")} sessões`,
+    capoeira: `${capoeiraMastered} dom. / ${capoeiraValidating} val.`,
+    dance: `${count("danca")} sessões`,
+  };
 }

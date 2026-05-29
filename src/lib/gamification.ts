@@ -4,7 +4,7 @@ import type { Reward } from "../types/rewards";
 import type { TrainingSession } from "../types/training";
 import { weekKey } from "./dates";
 import { getTotalCoinsPenalty } from "./penaltyEngine";
-import { hasAnyAlert, isExerciseFinished } from "./safety";
+import { isExerciseFinished } from "./safety";
 
 export const XP_RULES = {
   setLogged: 3,
@@ -16,6 +16,7 @@ export const XP_RULES = {
   capoeiraCompleted: 20,
   weekWithThreeStrength: 50,
   checkin: 30,
+  executionComplete: 15,
   cleanWorkout: 15,
   pr: 20,
 } as const;
@@ -77,12 +78,24 @@ export function calculateSessionXp(session: TrainingSession): number {
   );
   const exerciseXp =
     xpEligibleExercises.filter(isExerciseFinished).length * XP_RULES.exerciseCompleted;
-  const cleanXp =
-    session.status === "completed" && !hasAnyAlert(session)
-      ? XP_RULES.cleanWorkout
+  const executionXp =
+    isExecutionComplete(session)
+      ? XP_RULES.executionComplete
       : 0;
 
-  return setXp + exerciseXp + cleanXp + workoutBonus(session);
+  return setXp + exerciseXp + executionXp + workoutBonus(session);
+}
+
+function isExecutionComplete(session: TrainingSession): boolean {
+  if (session.status !== "completed") {
+    return false;
+  }
+
+  return (
+    session.exercises.some((exercise) => exercise.completed) ||
+    Boolean(session.completedBlocks?.length) ||
+    Boolean(session.technicalBlocks?.some((block) => block.completed))
+  );
 }
 
 export function getWeeklyStrengthBonus(sessions: TrainingSession[]): number {

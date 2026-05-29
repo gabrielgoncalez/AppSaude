@@ -12,9 +12,20 @@ const RESOLVED_STATUSES = new Set<DayEvent["status"]>([
 ]);
 
 export function getCycleWorkouts(plan: TrainingPlan): Workout[] {
+  const seenGroups = new Set<string>();
   return [...plan.workouts]
     .filter((workout) => workout.type !== "rest")
-    .sort((a, b) => a.dayOfWeek - b.dayOfWeek);
+    .sort((a, b) => (a.cycleOrder ?? a.dayOfWeek) - (b.cycleOrder ?? b.dayOfWeek))
+    .filter((workout) => {
+      if (!workout.sameDayGroupId) {
+        return true;
+      }
+      if (seenGroups.has(workout.sameDayGroupId)) {
+        return false;
+      }
+      seenGroups.add(workout.sameDayGroupId);
+      return true;
+    });
 }
 
 export function createInitialSchedule(
@@ -122,8 +133,9 @@ export function getNextCycleWorkoutAfter(data: AppData, workoutId: string): Work
     return safeData.trainingPlan.workouts[0];
   }
 
+  const representativeId = getCycleRepresentativeId(safeData.trainingPlan, workoutId);
   const activeIndex = cycleWorkouts.findIndex(
-    (workout) => workout.id === workoutId,
+    (workout) => workout.id === representativeId,
   );
   const nextIndex = activeIndex >= 0 ? (activeIndex + 1) % cycleWorkouts.length : 0;
   return cycleWorkouts[nextIndex];
@@ -176,6 +188,10 @@ export function completeWorkoutDay(
   const currentDate = toDate(date);
   const existing = getStoredDayEvent(safeData, dayKey(currentDate));
   const revision = getNextRevision(safeData.schedule);
+  const group = getWorkoutGroup(safeData.trainingPlan, workout);
+  if (group.length > 1) {
+    return completeWorkoutGroupPart(safeData, workout, group, currentDate, existing, revision);
+  }
   const nextWorkout = getNextCycleWorkout({
     ...safeData,
     schedule: { ...safeData.schedule, activeWorkoutId: workout.id },
@@ -209,6 +225,74 @@ export function completeWorkoutDay(
   };
 }
 
+function completeWorkoutGroupPart(
+  data: AppData,
+  workout: Workout,
+  group: Workout[],
+  date: Date,
+  existing: DayEvent | undefined,
+  revision: number,
+): AppData {
+  const now = new Date().toISOString();
+  const previousParts = new Map(
+    existing?.groupParts?.map((part) => [part.workoutId, part]) ?? [],
+  );
+  const groupParts = group.map((part) => {
+    const previous = previousParts.get(part.id);
+    const completed = part.id === workout.id || previous?.status === "completed";
+    return {
+      workoutId: part.id,
+      workoutName: part.name,
+      status: completed ? "completed" as const : "selected" as const,
+      completedAt: completed ? (previous?.completedAt ?? now) : undefined,
+    };
+  });
+  const allCompleted = groupParts.every((part) => part.status === "completed");
+  const nextIncomplete = group.find(
+    (part) => groupParts.find((item) => item.workoutId === part.id)?.status !== "completed",
+  );
+  const nextWorkout = allCompleted
+    ? getNextCycleWorkout({
+        ...data,
+        schedule: {
+          ...data.schedule,
+          activeWorkoutId: getCycleRepresentativeId(data.trainingPlan, workout.id),
+        },
+      })
+    : nextIncomplete ?? workout;
+  const event = createDayEvent({
+    existing,
+    date,
+    workout: getGroupEventWorkout(group),
+    status: allCompleted ? "completed" : "partial",
+    penaltyXp: 0,
+    manualSelection: existing?.manualSelection ?? false,
+    scheduleRevision: revision,
+    reason: allCompleted
+      ? "Missao composta concluida."
+      : "Missao composta parcialmente concluida.",
+    sameDayGroupId: workout.sameDayGroupId,
+    groupParts,
+  });
+
+  return {
+    ...data,
+    schedule: {
+      ...data.schedule,
+      activeWorkoutId: nextWorkout.id,
+      activeDate: dayKey(date),
+      todayWorkoutId: allCompleted ? workout.id : nextWorkout.id,
+      todayStatus: allCompleted ? "completed" : "partial",
+      todayDate: dayKey(date),
+      cycleOrder: reconcileCycleOrder(data.trainingPlan, data.schedule),
+      hasDebtAlert: false,
+      revision,
+      updatedAt: date.toISOString(),
+    },
+    dayEvents: upsertDayEvent(data.dayEvents, event),
+  };
+}
+
 export function markRecoveryRest(
   data: AppData,
   date: Date | string = new Date(),
@@ -219,6 +303,49 @@ export function markRecoveryRest(
   const existing = getStoredDayEvent(safeData, dayKey(currentDate));
   const revision = getNextRevision(safeData.schedule);
   const penaltyXp = getPenaltyFor("recovery_rest", safeData.dayEvents, currentDate);
+  const group = getWorkoutGroup(safeData.trainingPlan, workout);
+  if (group.length > 1) {
+    const nextWorkout = getNextCycleWorkout({
+      ...safeData,
+      schedule: {
+        ...safeData.schedule,
+        activeWorkoutId: getCycleRepresentativeId(safeData.trainingPlan, workout.id),
+      },
+    });
+    const event = createDayEvent({
+      existing,
+      date: currentDate,
+      workout: getGroupEventWorkout(group),
+      status: "recovery_rest",
+      penaltyXp,
+      penaltyKind: "recovery_rest",
+      manualSelection: existing?.manualSelection ?? false,
+      scheduleRevision: revision,
+      reason: "Descanso de recuperacao escolhido para a missao composta.",
+      sameDayGroupId: workout.sameDayGroupId,
+      groupParts: group.map((part) => ({
+        workoutId: part.id,
+        workoutName: part.name,
+        status: "recovery_rest",
+      })),
+    });
+
+    return {
+      ...safeData,
+      schedule: {
+        ...safeData.schedule,
+        activeWorkoutId: nextWorkout.id,
+        activeDate: dayKey(currentDate),
+        todayWorkoutId: workout.id,
+        todayStatus: "recovery_rest",
+        todayDate: dayKey(currentDate),
+        cycleOrder: reconcileCycleOrder(safeData.trainingPlan, safeData.schedule),
+        revision,
+        updatedAt: currentDate.toISOString(),
+      },
+      dayEvents: upsertDayEvent(safeData.dayEvents, event),
+    };
+  }
   const event = createDayEvent({
     existing,
     date: currentDate,
@@ -360,6 +487,8 @@ function createDayEvent({
   manualSelection,
   scheduleRevision,
   reason,
+  sameDayGroupId,
+  groupParts,
 }: {
   existing?: DayEvent;
   date: Date;
@@ -370,6 +499,8 @@ function createDayEvent({
   manualSelection: boolean;
   scheduleRevision?: number;
   reason?: string;
+  sameDayGroupId?: string;
+  groupParts?: DayEvent["groupParts"];
 }): DayEvent {
   const now = new Date().toISOString();
   return {
@@ -377,6 +508,8 @@ function createDayEvent({
     date: dayKey(date),
     workoutId: workout.id,
     workoutName: workout.name,
+    sameDayGroupId,
+    groupParts,
     status,
     scheduleRevision,
     penaltyXp,
@@ -425,21 +558,39 @@ function getScheduleDayEvent(data: AppData, key: string): DayEvent | undefined {
   }
 
   const stored = getStoredDayEvent(data, key);
+  const group = getWorkoutGroup(data.trainingPlan, workout);
+  const scheduleEventWorkout = group.length > 1 ? getGroupEventWorkout(group) : workout;
+  const storedMatchesGroup =
+    Boolean(workout.sameDayGroupId) &&
+    stored?.sameDayGroupId === workout.sameDayGroupId &&
+    stored?.status === data.schedule.todayStatus &&
+    (stored?.scheduleRevision === undefined ||
+      stored?.scheduleRevision === data.schedule.revision);
   const storedMatchesCurrentSchedule =
-    stored?.workoutId === workout.id &&
-    stored.status === data.schedule.todayStatus &&
-    (stored.scheduleRevision === undefined ||
-      stored.scheduleRevision === data.schedule.revision);
+    (stored?.workoutId === workout.id || stored?.workoutId === scheduleEventWorkout.id) &&
+    stored?.status === data.schedule.todayStatus &&
+    (stored?.scheduleRevision === undefined ||
+      stored?.scheduleRevision === data.schedule.revision);
 
-  if (storedMatchesCurrentSchedule) {
+  if (storedMatchesCurrentSchedule || storedMatchesGroup) {
     return stored;
   }
 
   return {
     id: key,
     date: key,
-    workoutId: workout.id,
-    workoutName: workout.name,
+    workoutId: scheduleEventWorkout.id,
+    workoutName: scheduleEventWorkout.name,
+    sameDayGroupId: workout.sameDayGroupId,
+    groupParts:
+      group.length > 1
+        ? group.map((part) => ({
+            workoutId: part.id,
+            workoutName: part.name,
+            status:
+              part.id === workout.id ? toDayEventPartStatus(data.schedule.todayStatus) : "selected",
+          }))
+        : undefined,
     status: data.schedule.todayStatus,
     scheduleRevision: data.schedule.revision,
     penaltyXp: 0,
@@ -510,6 +661,39 @@ function getOrderedCycleWorkouts(plan: TrainingPlan, schedule: ScheduleState): W
     .filter((workout): workout is Workout => Boolean(workout));
 
   return ordered.length ? ordered : fallback;
+}
+
+export function getWorkoutGroup(plan: TrainingPlan, workout: Workout): Workout[] {
+  if (!workout.sameDayGroupId) {
+    return [workout];
+  }
+
+  return plan.workouts
+    .filter((candidate) => candidate.sameDayGroupId === workout.sameDayGroupId)
+    .sort((a, b) => (a.groupOrder ?? 0) - (b.groupOrder ?? 0));
+}
+
+export function getWorkoutGroupForId(plan: TrainingPlan, workoutId: string): Workout[] {
+  const workout = plan.workouts.find((candidate) => candidate.id === workoutId);
+  return workout ? getWorkoutGroup(plan, workout) : [];
+}
+
+function getCycleRepresentativeId(plan: TrainingPlan, workoutId: string): string {
+  const group = getWorkoutGroupForId(plan, workoutId);
+  return group[0]?.id ?? workoutId;
+}
+
+function getGroupEventWorkout(group: Workout[]): Workout {
+  const first = group[0];
+  return {
+    ...first,
+    id: first.sameDayGroupId ?? first.id,
+    name: group.map((workout) => workout.name.split(" - ")[0]).join(" + "),
+  };
+}
+
+function toDayEventPartStatus(status: DayEvent["status"]) {
+  return status === "planned_rest" ? "selected" : status;
 }
 
 function arraysEqual(left: string[], right: string[]): boolean {

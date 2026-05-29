@@ -6,6 +6,7 @@ import {
   MASTER_TRAINING_PLAN_ID,
   MASTER_TRAINING_PLAN_VERSION,
 } from "../data/initialTrainingPlan";
+import { withDerivedExercises } from "./workoutItems";
 
 export const WAVE_REP_MIN = 8;
 export const WAVE_REP_MAX = 15;
@@ -17,7 +18,7 @@ export function normalizeAppDataForWave(data: AppData): {
   const basePlan = shouldUpgradeToMasterPlan(data.trainingPlan)
     ? cloneTrainingPlan(INITIAL_TRAINING_PLAN)
     : data.trainingPlan;
-  const nextPlan = normalizeTrainingPlanForWave(basePlan);
+  const nextPlan = withDerivedExercises(normalizeTrainingPlanForWave(basePlan));
   const withDefaults = ensureAppDataDefaults({ ...data, trainingPlan: nextPlan });
   if (basePlan === data.trainingPlan && nextPlan === data.trainingPlan && withDefaults === data) {
     return { data, changed: false };
@@ -70,7 +71,8 @@ export function normalizeTrainingPlanForWave(plan: TrainingPlan): TrainingPlan {
     return exercises === workout.exercises ? workout : { ...workout, exercises };
   });
 
-  return changed ? { ...planWithDefaultVariants, workouts } : plan;
+  const normalized = changed ? { ...planWithDefaultVariants, workouts } : plan;
+  return withDerivedExercises(normalized);
 }
 
 function ensureAppDataDefaults(data: AppData): AppData {

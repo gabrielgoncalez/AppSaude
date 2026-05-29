@@ -1,7 +1,8 @@
 import type { AppData } from "../types/appData";
-import type { Exercise, Workout } from "../types/training";
+import type { Exercise, Workout, WorkoutBlock } from "../types/training";
 import { getActiveExercises } from "./exerciseAnalytics";
 import { getExerciseProgressionHistory } from "./progression";
+import { deriveStrengthExercises } from "./workoutItems";
 import {
   getItemPrescription,
   getVariantRoleLabel,
@@ -16,12 +17,22 @@ export type PrescribedExercise = {
   prescription: WavePrescription;
 };
 
+export type PrescribedItem = PrescribedExercise & {
+  blockId: string;
+  blockName: string;
+};
+
+export type PrescribedBlock = Omit<WorkoutBlock, "items"> & {
+  items: PrescribedItem[];
+};
+
 export type TodayPrescription = {
   workoutId: string;
   workoutName: string;
   wave?: WaveType;
   waveLabel?: string;
   exercises: PrescribedExercise[];
+  prescribedBlocks: PrescribedBlock[];
   shortMessage: string;
 };
 
@@ -30,28 +41,23 @@ export function getTodayPrescription(
   workout: Workout,
   date = new Date(),
 ): TodayPrescription {
-  if (!workout.exercises?.length) {
+  if (!workout.exercises?.length && !workout.workoutBlocks?.length) {
     return {
       workoutId: workout.id,
       workoutName: workout.name,
       exercises: [],
+      prescribedBlocks: [],
       shortMessage: getSkillMessage(workout),
     };
   }
 
   const wave = getWorkoutWave(workout.id, data.sessions);
-  const exercises = getExercisesForWave(workout, wave).map((exercise) => {
-    const prescription = getItemPrescription(
-      exercise,
-      wave,
-      getExerciseProgressionHistory(exercise, data.sessions, undefined, date),
-    );
-
-    return {
-      exercise,
-      prescription: withVariantContext(prescription, exercise, wave),
-    };
-  });
+  const prescribedBlocks = getPrescribedBlocks(workout, wave, data, date);
+  const exercises = getExercisesForWave(
+    { ...workout, workoutBlocks: undefined, exercises: deriveStrengthExercises(workout) },
+    wave,
+  )
+    .map((exercise) => prescribeExercise(exercise, wave, data, date));
 
   return {
     workoutId: workout.id,
@@ -59,8 +65,36 @@ export function getTodayPrescription(
     wave,
     waveLabel: getWaveLabel(wave),
     exercises,
+    prescribedBlocks,
     shortMessage: `${workout.name} - ${getWaveLabel(wave)}.`,
   };
+}
+
+export function getPrescribedBlocks(
+  workout: Workout,
+  wave: WaveType,
+  data: AppData,
+  date = new Date(),
+): PrescribedBlock[] {
+  if (!workout.workoutBlocks?.length) {
+    return [];
+  }
+
+  return workout.workoutBlocks
+    .map((block) => {
+      const blockWorkout = { ...workout, workoutBlocks: undefined, exercises: block.items };
+      const selectedItems = getExercisesForWave(blockWorkout, wave)
+        .filter((exercise) => exercise.active !== false)
+        .filter((exercise) => exercise.phaseAvailability !== "future")
+        .map((exercise) => ({
+          ...prescribeExercise(exercise, wave, data, date),
+          blockId: block.id,
+          blockName: block.name,
+        }));
+
+      return { ...block, items: selectedItems };
+    })
+    .filter((block) => block.items.length > 0);
 }
 
 export function getExercisesForWave(workout: Workout, wave: WaveType): Exercise[] {
@@ -96,6 +130,24 @@ export function getExercisesForWave(workout: Workout, wave: WaveType): Exercise[
     }
     return exercise.variantWaves.includes(wave) || fallbackVariantIds.has(exercise.id);
   });
+}
+
+function prescribeExercise(
+  exercise: Exercise,
+  wave: WaveType,
+  data: AppData,
+  date: Date,
+): PrescribedExercise {
+  const prescription = getItemPrescription(
+    exercise,
+    wave,
+    getExerciseProgressionHistory(exercise, data.sessions, undefined, date),
+  );
+
+  return {
+    exercise,
+    prescription: withVariantContext(prescription, exercise, wave),
+  };
 }
 
 function withVariantContext(

@@ -1,5 +1,6 @@
 import type { AppData } from "../types/appData";
 import type { Exercise, ExerciseLog, TrainingPlan, TrainingSession, Workout } from "../types/training";
+import { deriveStrengthExercises, getPlanStrengthExercises } from "./workoutItems";
 import {
   formatKg,
   getExerciseProgressionHistory,
@@ -60,19 +61,11 @@ export type LineageAnalysis = {
 };
 
 export function getActiveExercises(workout: Workout): Exercise[] {
-  return (workout.exercises ?? []).filter((exercise) => exercise.active !== false);
+  return deriveStrengthExercises(workout).filter((exercise) => exercise.active !== false);
 }
 
 export function getPlanExercises(plan: TrainingPlan, includeInactive = true): PlanExercise[] {
-  return plan.workouts.flatMap((workout) =>
-    (workout.exercises ?? [])
-      .filter((exercise) => includeInactive || exercise.active !== false)
-      .map((exercise) => ({
-        workoutId: workout.id,
-        workoutName: workout.name,
-        exercise,
-      })),
-  );
+  return getPlanStrengthExercises(plan, includeInactive);
 }
 
 export function getExerciseAnalysis(
@@ -81,14 +74,16 @@ export function getExerciseAnalysis(
   date = new Date(),
 ): ExerciseAnalysis {
   const item = getPlanExercises(data.trainingPlan).find(
-    (candidate) => candidate.exercise.id === exerciseId,
+    (candidate) =>
+      candidate.exercise.id === exerciseId ||
+      candidate.exercise.legacyIds?.includes(exerciseId),
   );
 
   if (!item) {
     return createEmptyAnalysis("Escolha um exercício para abrir a análise da Onda.");
   }
 
-  const matchingSessions = getSessionsWithExercise(data.sessions, exerciseId);
+  const matchingSessions = getSessionsWithExercise(data.sessions, exerciseId, item.exercise);
   if (matchingSessions.length === 0) {
     return {
       ...createEmptyAnalysis("Primeira carga máxima aparece após um treino registrado."),
@@ -105,7 +100,7 @@ export function getExerciseAnalysis(
     latest?.session.id,
     date,
   );
-  const repsByWeight = getRepsByWeight(data.sessions, exerciseId);
+  const repsByWeight = getRepsByWeight(data.sessions, exerciseId, item.exercise);
   const sessionPoints = matchingSessions.map(({ session, log }) => ({
     date: session.date,
     maxWeightKg: getMaxWeight(log),
@@ -152,7 +147,7 @@ export function getLineageAnalysis(
   const variants = getPlanExercises(data.trainingPlan)
     .filter(({ exercise }) => exercise.lineageId === lineageId)
     .map(({ exercise }) => {
-      const matchingSessions = getSessionsWithExercise(data.sessions, exercise.id);
+      const matchingSessions = getSessionsWithExercise(data.sessions, exercise.id, exercise);
       const latest = matchingSessions.at(-1);
       const history = getExerciseProgressionHistory(exercise, data.sessions, undefined, date);
       return {
@@ -181,12 +176,13 @@ export function getLineageAnalysis(
 export function getRepsByWeight(
   sessions: TrainingSession[],
   exerciseId: string,
+  exercise?: Exercise,
 ): RepsByWeightPoint[] {
   const totals = new Map<number, number>();
 
   sessions.forEach((session) => {
     session.exercises
-      .filter((log) => log.exerciseId === exerciseId)
+      .filter((log) => matchesExerciseId(log.exerciseId, exerciseId, exercise))
       .forEach((log) => {
         log.sets.forEach((set) => {
           if (!set.completed || !set.weightKg) {
@@ -205,13 +201,27 @@ export function getRepsByWeight(
     }));
 }
 
-function getSessionsWithExercise(sessions: TrainingSession[], exerciseId: string) {
+function getSessionsWithExercise(
+  sessions: TrainingSession[],
+  exerciseId: string,
+  exercise?: Exercise,
+) {
   return [...sessions]
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
     .flatMap((session) => {
-      const log = session.exercises.find((exercise) => exercise.exerciseId === exerciseId);
+      const log = session.exercises.find((log) =>
+        matchesExerciseId(log.exerciseId, exerciseId, exercise),
+      );
       return log ? [{ session, log }] : [];
     });
+}
+
+function matchesExerciseId(
+  logExerciseId: string,
+  exerciseId: string,
+  exercise?: Exercise,
+): boolean {
+  return logExerciseId === exerciseId || Boolean(exercise?.legacyIds?.includes(logExerciseId));
 }
 
 function createEmptyAnalysis(emptyHint: string): ExerciseAnalysis {
