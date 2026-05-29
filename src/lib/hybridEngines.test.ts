@@ -127,6 +127,63 @@ describe("hybrid engines", () => {
     expect(summary.score).toBeLessThanOrEqual(80);
   });
 
+  it("bonus semanal de compromisso exige tres musculacoes", () => {
+    const data = createInitialAppData(new Date("2026-05-01T10:00:00.000Z"));
+    data.dayEvents = [
+      {
+        id: "2026-05-04",
+        date: "2026-05-04",
+        workoutId: "treino-a",
+        workoutName: "Treino A",
+        status: "completed",
+        penaltyXp: 0,
+        manualSelection: false,
+        createdAt: "2026-05-04T10:00:00.000Z",
+        updatedAt: "2026-05-04T10:00:00.000Z",
+      },
+      {
+        id: "2026-05-05",
+        date: "2026-05-05",
+        workoutId: "treino-b",
+        workoutName: "Treino B",
+        status: "completed",
+        penaltyXp: 0,
+        manualSelection: false,
+        createdAt: "2026-05-05T10:00:00.000Z",
+        updatedAt: "2026-05-05T10:00:00.000Z",
+      },
+      {
+        id: "2026-05-06",
+        date: "2026-05-06",
+        workoutId: "boxe",
+        workoutName: "Boxe",
+        status: "completed",
+        penaltyXp: 0,
+        manualSelection: false,
+        createdAt: "2026-05-06T10:00:00.000Z",
+        updatedAt: "2026-05-06T10:00:00.000Z",
+      },
+      {
+        id: "2026-05-07",
+        date: "2026-05-07",
+        workoutId: "treino-c",
+        workoutName: "Treino C",
+        status: "recovery_rest",
+        penaltyXp: 0,
+        manualSelection: false,
+        createdAt: "2026-05-07T10:00:00.000Z",
+        updatedAt: "2026-05-07T10:00:00.000Z",
+      },
+    ];
+
+    expect(getMonthlyCommitmentSummary(data, new Date("2026-05-08T10:00:00.000Z")).score).toBe(92);
+    data.dayEvents[3] = {
+      ...data.dayEvents[3],
+      status: "completed",
+    };
+    expect(getMonthlyCommitmentSummary(data, new Date("2026-05-08T10:00:00.000Z")).score).toBe(100);
+  });
+
   it("PR aplica bônus uma vez por item no dia", () => {
     const previous = session("s1", "2026-05-01T10:00:00.000Z", 40);
     const current = session("s2", "2026-05-08T10:00:00.000Z", 45);

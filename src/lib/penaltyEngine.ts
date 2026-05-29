@@ -129,11 +129,6 @@ function isFullMeasurementDue(data: AppData, date: Date): boolean {
 }
 
 function getCompletedWeekBonus(data: AppData, monthStart: Date, date: Date): number {
-  const completedDates = new Set(
-    data.dayEvents
-      .filter((event) => event.status === "completed")
-      .map((event) => event.date),
-  );
   let bonus = 0;
   let cursor = startOfWeek(monthStart, { weekStartsOn: 1 });
 
@@ -144,10 +139,13 @@ function getCompletedWeekBonus(data: AppData, monthStart: Date, date: Date): num
       return day >= cursor && day <= weekEnd;
     });
     const hasMiss = weekEvents.some((event) => event.status === "missed");
-    const strengthCompleted = [...completedDates].filter((day) => {
-      const parsed = parseISO(day);
-      return parsed >= cursor && parsed <= weekEnd;
-    }).length;
+    const strengthCompleted = new Set(
+      weekEvents
+        .filter(
+          (event) => event.status === "completed" && event.workoutId.startsWith("treino-"),
+        )
+        .map((event) => event.workoutId),
+    ).size;
     if (!hasMiss && strengthCompleted >= 3) {
       bonus += 10;
     }

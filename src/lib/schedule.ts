@@ -225,6 +225,65 @@ export function completeWorkoutDay(
   };
 }
 
+export function markWorkoutPartial(
+  data: AppData,
+  workout: Workout,
+  date: Date | string = new Date(),
+): AppData {
+  const safeData = ensureSchedule(data, date);
+  const currentDate = toDate(date);
+  const existing = getStoredDayEvent(safeData, dayKey(currentDate));
+  const revision = getNextRevision(safeData.schedule);
+  const group = getWorkoutGroup(safeData.trainingPlan, workout);
+  const previousParts = new Map(
+    existing?.groupParts?.map((part) => [part.workoutId, part]) ?? [],
+  );
+  const groupParts =
+    group.length > 1
+      ? group.map((part) => {
+          const previous = previousParts.get(part.id);
+          return {
+            workoutId: part.id,
+            workoutName: part.name,
+            status:
+              part.id === workout.id
+                ? ("partial" as const)
+                : (previous?.status ?? ("selected" as const)),
+            completedAt: previous?.completedAt,
+          };
+        })
+      : undefined;
+  const event = createDayEvent({
+    existing,
+    date: currentDate,
+    workout: group.length > 1 ? getGroupEventWorkout(group) : workout,
+    status: "partial",
+    penaltyXp: 0,
+    manualSelection: existing?.manualSelection ?? false,
+    scheduleRevision: revision,
+    reason: "Missao salva parcialmente.",
+    sameDayGroupId: workout.sameDayGroupId,
+    groupParts,
+  });
+
+  return {
+    ...safeData,
+    schedule: {
+      ...safeData.schedule,
+      activeWorkoutId: workout.id,
+      activeDate: dayKey(currentDate),
+      todayWorkoutId: workout.id,
+      todayStatus: "partial",
+      todayDate: dayKey(currentDate),
+      cycleOrder: reconcileCycleOrder(safeData.trainingPlan, safeData.schedule),
+      hasDebtAlert: false,
+      revision,
+      updatedAt: currentDate.toISOString(),
+    },
+    dayEvents: upsertDayEvent(safeData.dayEvents, event),
+  };
+}
+
 function completeWorkoutGroupPart(
   data: AppData,
   workout: Workout,

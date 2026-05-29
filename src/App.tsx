@@ -29,6 +29,7 @@ import {
   getNextCycleWorkout,
   getNextCycleWorkoutAfter,
   getTodayWorkout,
+  markWorkoutPartial,
   markRecoveryRest,
   resolvePendingDays,
   selectWorkoutForToday,
@@ -37,6 +38,11 @@ import { buildWorkoutSummary, type WorkoutSummary } from "./lib/postWorkout";
 import { getPrBonus } from "./lib/progressionEngine";
 import { getTodayPrescription } from "./lib/prescriptionEngine";
 import type { PrescribedBlock } from "./lib/prescriptionEngine";
+import {
+  getCompletionKey,
+  isDailyBlockCompleted,
+  toggleScopedCompletion,
+} from "./lib/dailyCompletion";
 import { normalizeAppDataForWave } from "./lib/trainingPlan";
 import {
   signInWithGoogle,
@@ -246,6 +252,13 @@ export default function App() {
     () => (data && workout ? getTodayPrescription(data, workout) : undefined),
     [data, workout],
   );
+  const capoeiraHasNewMovement = useMemo(
+    () =>
+      data?.capoeiraMovements?.some(
+        (movement) => movement.status === "not_started" || movement.status === "learning",
+      ) ?? true,
+    [data?.capoeiraMovements],
+  );
 
   const previousSets = useMemo(() => {
     const map = new Map<string, SetLog>();
@@ -337,40 +350,94 @@ export default function App() {
     });
   }
 
+  function syncSessionExerciseCompletion(
+    session: TrainingSession,
+    exercise: Exercise,
+  ): TrainingSession {
+    const block = todayPrescription?.prescribedBlocks.find((candidate) =>
+      candidate.items.some(
+        (item) =>
+          item.exercise.id === exercise.id ||
+          Boolean(item.exercise.legacyIds?.includes(exercise.id)),
+      ),
+    );
+    const log = session.exercises.find(
+      (item) =>
+        item.exerciseId === exercise.id ||
+        Boolean(exercise.legacyIds?.includes(item.exerciseId)),
+    );
+    if (!block || !log?.completed) {
+      return session;
+    }
+
+    const completedItems = unique([
+      ...(session.completedItems ?? []),
+      getCompletionKey(block.id, exercise.id),
+    ]);
+    const completedBlocks = isDailyBlockCompleted({
+      block,
+      completedItems,
+      exerciseLogs: session.exercises,
+    })
+      ? unique([...(session.completedBlocks ?? []), block.id])
+      : session.completedBlocks;
+
+    return {
+      ...session,
+      completedItems,
+      completedBlocks,
+    };
+  }
+
   function addSet(exercise: Exercise, set: SetLog) {
     setWorkoutSummary(undefined);
-    updateTodaySession((session) => ({
-      ...session,
-      status: "partial",
-      exercises: upsertExercise(session.exercises, exercise, (log) => ({
-        ...log,
-        sets: [...log.sets, set],
-        completed:
-          [...log.sets, set].filter((candidate) => candidate.completed).length >=
-          exercise.targetSets,
-      })),
-    }));
+    updateTodaySession((session) => {
+      const exercises = upsertExercise(session.exercises, exercise, (log) => {
+        const sets = [...log.sets, set];
+        return {
+          ...log,
+          sets,
+          completed:
+            sets.filter((candidate) => candidate.completed).length >= exercise.targetSets,
+        };
+      });
+      return syncSessionExerciseCompletion({
+        ...session,
+        status: "partial",
+        exercises,
+      }, exercise);
+    });
   }
 
   function finishExerciseSet(exercise: Exercise, set: SetLog) {
     setWorkoutSummary(undefined);
-    updateTodaySession((session) => ({
-      ...session,
-      status: "partial",
-      exercises: upsertExercise(session.exercises, exercise, (log) => ({
+    updateTodaySession((session) => {
+      const exercises = upsertExercise(session.exercises, exercise, (log) => ({
         ...log,
         sets: [...log.sets, set],
         completed: true,
-      })),
-    }));
+      }));
+      return syncSessionExerciseCompletion({
+        ...session,
+        status: "partial",
+        exercises,
+      }, exercise);
+    });
   }
 
   function completeChecklistItem(block: PrescribedBlock, item: Exercise) {
     setWorkoutSummary(undefined);
     updateTodaySession((session) => {
-      const completedItems = toggleUnique(session.completedItems ?? [], item.id);
-      const blockItemIds = block.items.map((candidate) => candidate.exercise.id);
-      const blockCompleted = blockItemIds.every((id) => completedItems.includes(id));
+      const completedItems = toggleScopedCompletion(
+        session.completedItems ?? [],
+        block.id,
+        item,
+      );
+      const blockCompleted = isDailyBlockCompleted({
+        block,
+        completedItems,
+        exerciseLogs: session.exercises,
+      });
       return {
         ...session,
         status: "partial",
@@ -382,17 +449,58 @@ export default function App() {
     });
   }
 
-  function completeChecklistBlock(block: PrescribedBlock) {
+  function completeChecklistItemAndWorkout(block: PrescribedBlock, item: Exercise) {
+    if (!data || !workout) {
+      return;
+    }
     setWorkoutSummary(undefined);
-    updateTodaySession((session) => ({
-      ...session,
-      status: "partial",
-      completedBlocks: unique([...(session.completedBlocks ?? []), block.id]),
-      completedItems: unique([
-        ...(session.completedItems ?? []),
-        ...block.items.map((item) => item.exercise.id),
-      ]),
-    }));
+    const current = todaySession ?? createSession(workout);
+    const previousSessions = data.sessions.filter((session) => session.id !== current.id);
+    const completedItems = unique([
+      ...(current.completedItems ?? []),
+      getCompletionKey(block.id, item.id),
+    ]);
+    const blockCompleted = isDailyBlockCompleted({
+      block,
+      completedItems,
+      exerciseLogs: current.exercises,
+    });
+    const updated = withRecalculatedXp(
+      {
+        ...current,
+        status: "completed",
+        completedItems,
+        completedBlocks: blockCompleted
+          ? unique([...(current.completedBlocks ?? []), block.id])
+          : current.completedBlocks,
+      },
+      previousSessions,
+    );
+    const exists = data.sessions.some((session) => session.id === updated.id);
+    const sessions = exists
+      ? data.sessions.map((session) => (session.id === updated.id ? updated : session))
+      : [...data.sessions, updated];
+    const completedData = completeWorkoutDay({ ...data, sessions }, workout);
+    const resolvedNextWorkout =
+      completedData.trainingPlan.workouts.find(
+        (candidate) => candidate.id === completedData.schedule.activeWorkoutId,
+      ) ?? getNextCycleWorkout(completedData);
+    const summaryWorkout = todayPrescription?.exercises.length
+      ? {
+          ...workout,
+          exercises: todayPrescription.exercises.map((candidate) => candidate.exercise),
+        }
+      : workout;
+
+    setWorkoutSummary(
+      buildWorkoutSummary({
+        session: updated,
+        previousSessions,
+        workout: summaryWorkout,
+        nextWorkout: resolvedNextWorkout,
+      }),
+    );
+    commit(completedData);
   }
 
   function completeWorkout() {
@@ -441,12 +549,13 @@ export default function App() {
     const current = todaySession ?? createSession(workout);
     const previousSessions = data.sessions.filter((session) => session.id !== current.id);
     const technicalLog = createSkillExerciseLog(workout, metrics);
+    const targetStatus = metrics.status ?? "completed";
     const updated = withRecalculatedXp(
       {
         ...current,
         durationMin: metrics.durationMin ?? current.durationMin,
         notes: metrics.notes ?? current.notes,
-        status: "completed",
+        status: targetStatus,
         completedBlocks: metrics.completedBlocks ?? current.completedBlocks,
         completedItems: metrics.completedItems ?? current.completedItems,
         technicalBlocks: metrics.technicalBlocks ?? current.technicalBlocks,
@@ -463,6 +572,12 @@ export default function App() {
     const sessions = exists
       ? data.sessions.map((session) => (session.id === updated.id ? updated : session))
       : [...data.sessions, updated];
+    if (targetStatus !== "completed") {
+      commit(markWorkoutPartial({ ...data, sessions }, workout));
+      setWorkoutSummary(undefined);
+      return;
+    }
+
     const completedData = completeWorkoutDay({ ...data, sessions }, workout);
     const resolvedNextWorkout =
       completedData.trainingPlan.workouts.find(
@@ -689,6 +804,29 @@ export default function App() {
       ) : null}
       {view === "hoje" ? (
         <div className="space-y-4">
+          {workoutSummary ? (
+            <PostWorkoutSummary
+              onBack={() => setWorkoutSummary(undefined)}
+              onOpenProgress={() => navigate("evolucao")}
+              onOpenRewards={() => navigate("recompensas")}
+              summary={workoutSummary}
+            />
+          ) : (
+            <TodayWorkoutPage
+              onAddSet={addSet}
+              onCompleteChecklistItemAndWorkout={completeChecklistItemAndWorkout}
+              onCompleteChecklistItem={completeChecklistItem}
+              onCompleteSkillWorkout={completeSkillWorkout}
+              onCompleteWorkout={completeWorkout}
+              onFinishExerciseSet={finishExerciseSet}
+              capoeiraHasNewMovement={capoeiraHasNewMovement}
+              previousSets={previousSets}
+              prescription={todayPrescription}
+              session={todaySession}
+              sessions={data.sessions}
+              workout={workout}
+            />
+          )}
           <DashboardPage
             data={data}
             dayEvent={dayEvent}
@@ -700,28 +838,6 @@ export default function App() {
             onDismissCheckinInsight={() => setCheckinInsight(undefined)}
             workout={workout}
           />
-          {workoutSummary ? (
-            <PostWorkoutSummary
-              onBack={() => setWorkoutSummary(undefined)}
-              onOpenProgress={() => navigate("evolucao")}
-              onOpenRewards={() => navigate("recompensas")}
-              summary={workoutSummary}
-            />
-          ) : (
-            <TodayWorkoutPage
-              onAddSet={addSet}
-              onCompleteChecklistBlock={completeChecklistBlock}
-              onCompleteChecklistItem={completeChecklistItem}
-              onCompleteSkillWorkout={completeSkillWorkout}
-              onCompleteWorkout={completeWorkout}
-              onFinishExerciseSet={finishExerciseSet}
-              previousSets={previousSets}
-              prescription={todayPrescription}
-              session={todaySession}
-              sessions={data.sessions}
-              workout={workout}
-            />
-          )}
         </div>
       ) : null}
       {view === "plano" ? (
@@ -852,12 +968,6 @@ function withRecalculatedXp(
 
 function unique<T>(items: T[]): T[] {
   return [...new Set(items)];
-}
-
-function toggleUnique(items: string[], item: string): string[] {
-  return items.includes(item)
-    ? items.filter((candidate) => candidate !== item)
-    : [...items, item];
 }
 
 function isCloudSnapshotOlderThanPending(

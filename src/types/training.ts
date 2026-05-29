@@ -135,6 +135,7 @@ export type ExerciseVariantRole =
 export type Exercise = {
   id: string;
   legacyIds?: string[];
+  referenceId?: string;
   name: string;
   displayName?: string;
   type: ExerciseType;
@@ -156,6 +157,7 @@ export type Exercise = {
   incrementKg?: number;
   equipment?: string;
   active?: boolean;
+  required?: boolean;
   muscleGroups?: string[];
   isKeyExercise?: boolean;
   strengthWaveEligible?: boolean;
@@ -277,6 +279,7 @@ export type TrainingSession = {
 };
 
 export type SkillWorkoutMetrics = {
+  status?: WorkoutStatus;
   durationMin?: number;
   rounds?: number;
   errors?: number;
@@ -284,6 +287,7 @@ export type SkillWorkoutMetrics = {
   attempts?: number;
   quality1to5?: 1 | 2 | 3 | 4 | 5;
   cleanStreakSec?: number;
+  technicalValues?: Record<string, TechnicalMetricValue>;
   technicalRatings?: Record<string, 1 | 2 | 3 | 4 | 5>;
   completedBlocks?: string[];
   completedItems?: string[];

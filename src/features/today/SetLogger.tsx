@@ -10,6 +10,9 @@ type SetLoggerProps = {
   nextIndex: number;
   targetSets: number;
   initialReps?: number;
+  initialDurationSec?: number;
+  metricMode?: "reps" | "duration";
+  weightLabel?: string;
   onSaveSet: (set: SetLog) => void;
   onFinishExerciseSet: (set: SetLog) => void;
 };
@@ -20,12 +23,19 @@ export function SetLogger({
   nextIndex,
   targetSets,
   initialReps = 8,
+  initialDurationSec = 30,
+  metricMode = "reps",
+  weightLabel = "Carga kg",
   onSaveSet,
   onFinishExerciseSet,
 }: SetLoggerProps) {
   const base = useMemo(() => lastSet ?? previousSet, [lastSet, previousSet]);
   const [weightKg, setWeightKg] = useState<number>(base?.weightKg ?? 0);
-  const [reps, setReps] = useState<number>(base?.reps ?? initialReps);
+  const [reps, setReps] = useState<number>(
+    metricMode === "duration"
+      ? (base?.durationSec ?? initialDurationSec)
+      : (base?.reps ?? initialReps),
+  );
   const isFinalSet = isFinalExerciseSet(nextIndex, targetSets);
   const actionLabel = getSetActionLabel(nextIndex, targetSets);
 
@@ -33,7 +43,7 @@ export function SetLogger({
     const set = {
       setIndex: nextIndex,
       weightKg,
-      reps,
+      ...(metricMode === "duration" ? { durationSec: reps } : { reps }),
       completed: true,
     };
 
@@ -64,7 +74,7 @@ export function SetLogger({
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <NumberStepper
           inputMode="decimal"
-          label="Carga kg"
+          label={weightLabel}
           maxDecimals={1}
           onChange={setWeightKg}
           step={2.5}
@@ -72,9 +82,9 @@ export function SetLogger({
         />
         <NumberStepper
           inputMode="numeric"
-          label="Repetições"
+          label={metricMode === "duration" ? "Tempo (s)" : "Repeticoes"}
           onChange={setReps}
-          step={1}
+          step={metricMode === "duration" ? 5 : 1}
           value={reps}
         />
       </div>

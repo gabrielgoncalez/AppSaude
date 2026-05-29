@@ -7,8 +7,9 @@ import {
   getProgressionSuggestion,
   getWaveRepRangeLabel,
 } from "../../lib/progression";
+import { openReferenceVideoSearch } from "../../lib/referenceSearch";
 import type { WavePrescription } from "../../lib/waveEngine";
-import type { Exercise, ExerciseLog, SetLog, TrainingSession } from "../../types/training";
+import type { Exercise, ExerciseLog, SetLog, TrainingSession, Workout } from "../../types/training";
 import { SetLogger } from "./SetLogger";
 
 type ExerciseCardProps = {
@@ -18,6 +19,7 @@ type ExerciseCardProps = {
   sessions: TrainingSession[];
   currentSessionId?: string;
   prescription?: WavePrescription;
+  workout?: Workout;
   onAddSet: (exercise: Exercise, set: SetLog) => void;
   onFinishExerciseSet: (exercise: Exercise, set: SetLog) => void;
 };
@@ -29,6 +31,7 @@ export function ExerciseCard({
   sessions,
   currentSessionId,
   prescription,
+  workout,
   onAddSet,
   onFinishExerciseSet,
 }: ExerciseCardProps) {
@@ -43,6 +46,12 @@ export function ExerciseCard({
   const targetSets = prescription?.targetSets ?? exercise.targetSets;
   const restSec = prescription?.restSec ?? exercise.restSec;
   const displayName = exercise.displayName ?? exercise.name;
+  const usesDurationMetric =
+    Boolean(exercise.durationSec) && exercise.repMin === undefined && exercise.repMax === undefined;
+  const weightLabel =
+    exercise.id === "graviton" || (exercise.incrementKg ?? 0) < 0
+      ? "Assistencia kg"
+      : "Carga kg";
 
   return (
     <Card>
@@ -56,7 +65,7 @@ export function ExerciseCard({
             <button
               aria-label={`Pesquisar video de execucao para ${displayName}`}
               className="tap-target inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-700 bg-slate-950 text-slate-300 transition hover:border-teal-300 hover:text-teal-200"
-              onClick={() => openExerciseVideoSearch(exercise)}
+              onClick={() => openReferenceVideoSearch(exercise, workout)}
               title="Pesquisar video de execucao"
               type="button"
             >
@@ -147,7 +156,7 @@ export function ExerciseCard({
               <tr>
                 <th className="px-3 py-2">Série</th>
                 <th className="px-3 py-2">Carga</th>
-                <th className="px-3 py-2">Reps</th>
+                <th className="px-3 py-2">{usesDurationMetric ? "Tempo" : "Reps"}</th>
               </tr>
             </thead>
             <tbody>
@@ -155,7 +164,9 @@ export function ExerciseCard({
                 <tr className="border-t border-slate-800 text-slate-200" key={set.setIndex}>
                   <td className="px-3 py-2 font-bold">{set.setIndex}</td>
                   <td className="px-3 py-2">{set.weightKg ?? 0} kg</td>
-                  <td className="px-3 py-2">{set.reps ?? "-"}</td>
+                  <td className="px-3 py-2">
+                    {usesDurationMetric ? `${set.durationSec ?? "-"}s` : (set.reps ?? "-")}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -167,25 +178,16 @@ export function ExerciseCard({
         <SetLogger
           lastSet={lastSet}
           initialReps={prescription?.repMin ?? exercise.repMin ?? 8}
+          initialDurationSec={exercise.durationSec}
+          metricMode={usesDurationMetric ? "duration" : "reps"}
           nextIndex={(log?.sets.length ?? 0) + 1}
           onFinishExerciseSet={(set) => onFinishExerciseSet(exercise, set)}
           onSaveSet={(set) => onAddSet(exercise, set)}
           previousSet={previousSet}
           targetSets={targetSets}
+          weightLabel={weightLabel}
         />
       </div>
     </Card>
-  );
-}
-
-function openExerciseVideoSearch(exercise: Exercise) {
-  const query = encodeURIComponent(
-    exercise.referenceSearchQuery ??
-      `${exercise.displayName ?? exercise.name} execucao correta exercicio`,
-  );
-  window.open(
-    `https://www.google.com/search?tbm=vid&q=${query}`,
-    "_blank",
-    "noopener,noreferrer",
   );
 }

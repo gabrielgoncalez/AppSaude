@@ -25,6 +25,7 @@ function exercise(input: ExerciseInput): Exercise {
   return {
     ...input,
     name: input.displayName,
+    referenceId: input.referenceId ?? input.id,
     targetSets: input.targetSets ?? 1,
     restSec: input.restSec ?? 0,
     referenceSearchQuery:
@@ -247,7 +248,7 @@ const basketballBaseBody = [
   }),
   timed({
     id: "basquete-ponte-gluteo-sustentada",
-    displayName: "Ponte de Gluteo Sustentada",
+    displayName: "Ponte de Glúteo Sustentada",
     type: "base_body",
     kind: "core",
     priority: "warmup",
@@ -280,7 +281,7 @@ const boxingBaseBody = [
   }),
   timed({
     id: "boxe-guarda-alta-isometrica",
-    displayName: "Guarda Alta Isometrica",
+    displayName: "Guarda Alta Isométrica",
     type: "base_body",
     kind: "core",
     priority: "warmup",
@@ -291,17 +292,18 @@ const boxingBaseBody = [
   }),
   timed({
     id: "boxe-prancha-alta-inclinada",
-    displayName: "Prancha Alta/Inclinada",
+    displayName: "Prancha Inclinada",
     type: "base_body",
     kind: "core",
     priority: "warmup",
     durationSec: 30,
     equipment: "peso corporal",
-    referenceSearchQuery: "incline high plank beginner",
+    referenceSearchQuery: "incline plank beginner",
+    note: "Quando ficar facil, evoluir para Prancha Alta.",
   }),
   timed({
     id: "boxe-ponte-gluteo-sustentada",
-    displayName: "Ponte de Gluteo Sustentada",
+    displayName: "Ponte de Glúteo Sustentada",
     type: "base_body",
     kind: "core",
     priority: "warmup",
@@ -326,16 +328,17 @@ const capoeiraBaseBody = [
   }),
   timed({
     id: "capoeira-prancha-alta-inclinada",
-    displayName: "Prancha Alta/Inclinada",
+    displayName: "Prancha Inclinada",
     type: "base_body",
     kind: "core",
     priority: "base",
     durationSec: 30,
-    referenceSearchQuery: "prancha alta inclinada iniciante",
+    referenceSearchQuery: "incline plank beginner",
+    note: "Quando ficar facil, evoluir para Prancha Alta.",
   }),
   timed({
     id: "capoeira-ponte-gluteo-sustentada",
-    displayName: "Ponte de Gluteo Sustentada",
+    displayName: "Ponte de Glúteo Sustentada",
     type: "base_body",
     kind: "core",
     priority: "base",
@@ -1409,7 +1412,7 @@ const basquete: Workout = {
           note: "Futuro. Entra quando a base de controle estiver sólida.",
         }),
       ),
-    ]),
+    ], { required: true }),
     block("basquete-teste-5min", "Teste 5 Minutos - Handle Control", "test", [
       skill({
         id: "basquete-teste-handle-control",
@@ -1990,7 +1993,7 @@ const capoeira: Workout = {
         referenceSearchQuery: "capoeira Mestre Koioty movimento iniciante",
         note: "Registrar status: não iniciado, aprendendo, validando, dominado ou revisão.",
       }),
-    ]),
+    ], { required: true }),
     block("capoeira-fechamento", "Fechamento Técnico de Capoeira", "cooldown", [
       timed({
         id: "capoeira-fechamento-tecnico",
@@ -2033,7 +2036,7 @@ const danca: Workout = {
         note:
           "Registrar programa/curso, aula/episódio, estilo, duração feita, se concluiu, trecho difícil, confiança, fluidez, memória e notas.",
       }),
-    ]),
+    ], { required: true }),
     block("danca-flow", "Repetição Final / Flow", "technical", [
       skill({
         id: "danca-repeticao-final-flow",
@@ -2053,6 +2056,33 @@ const danca: Workout = {
 };
 
 danca.blocks = workoutBlocks(danca);
+
+const futureBaseBody = [
+  ["future-wall-sit", "Wall Sit", "time_progression"],
+  ["future-hollow-body-hold", "Hollow Body Hold", "time_progression"],
+  ["future-bear-plank", "Bear Plank", "time_progression"],
+  ["future-dead-hang", "Dead Hang", "time_progression"],
+  ["future-afundo-lateral", "Afundo Lateral", "quality_progression"],
+  ["future-cossack-squat", "Cossack Squat", "quality_progression"],
+  ["future-bear-crawl", "Bear Crawl", "quality_progression"],
+  ["future-bear-crawl-lateral", "Bear Crawl Lateral", "quality_progression"],
+  ["future-crab-hold", "Crab Hold", "time_progression"],
+  ["future-crab-walk", "Crab Walk", "quality_progression"],
+].map(([id, displayName, progressionModel]) =>
+  timed({
+    id,
+    displayName,
+    type: "base_body",
+    kind: "base_body",
+    priority: "future",
+    active: false,
+    phaseAvailability: "future",
+    durationSec: 30,
+    progressionModel: progressionModel as ProgressionModel,
+    referenceSearchQuery: `${displayName} beginner exercise`,
+    note: "Banco futuro de base corporal. Nao aparece no treino ate ser ativado por fase.",
+  }),
+);
 
 const domingo: Workout = {
   id: "descanso",
@@ -2086,6 +2116,13 @@ const domingo: Workout = {
         referenceSearchQuery: "Ginga capoeira Mestre Koioty",
       }),
     ]),
+    block(
+      "banco-futuro-base-corporal",
+      "Banco Futuro de Base Corporal",
+      "base_body",
+      futureBaseBody,
+      { required: false },
+    ),
   ],
 };
 

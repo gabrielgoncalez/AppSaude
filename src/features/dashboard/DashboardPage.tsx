@@ -4,6 +4,7 @@ import {
   Bed,
   CalendarClock,
   Flame,
+  Search,
   Scale,
   Shuffle,
   Trophy,
@@ -25,10 +26,11 @@ import {
 } from "../../lib/gamification";
 import { getMonthlyCommitmentSummary } from "../../lib/penaltyEngine";
 import { getCurrentPhaseReading } from "../../lib/phaseEngine";
+import { openReferenceVideoSearch } from "../../lib/referenceSearch";
 import { getCycleWorkouts, getWorkoutGroup } from "../../lib/schedule";
 import { getTrainingInsights, type TrainingInsight } from "../../lib/trainingInsights";
 import type { AppData, DayEvent } from "../../types/appData";
-import type { Workout } from "../../types/training";
+import type { Exercise, Workout } from "../../types/training";
 
 type DashboardPageProps = {
   data: AppData;
@@ -75,7 +77,14 @@ export function DashboardPage({
   const selectorWorkouts = cycleWorkouts.some((candidate) => candidate.id === workout.id)
     ? cycleWorkouts
     : [...cycleWorkouts, workout];
-  const visibleBlocks = workout.workoutBlocks?.slice(0, 6) ?? [];
+  const visibleItems =
+    workout.workoutBlocks
+      ?.flatMap((block) =>
+        block.items.filter((item) => item.active !== false && item.phaseAvailability !== "future"),
+      )
+      .slice(0, 6) ??
+    workout.exercises?.filter((item) => item.active !== false).slice(0, 6) ??
+    [];
 
   return (
     <div className="space-y-4">
@@ -162,7 +171,11 @@ export function DashboardPage({
                   </p>
                   <p className="mt-1 font-black text-white">{part.name}</p>
                   <p className="mt-1 text-sm text-teal-200">
-                    {partStatus === "completed" ? "concluída" : "pendente"}
+                    {partStatus === "completed"
+                      ? "concluída"
+                      : partStatus === "partial"
+                        ? "parcial - retomar"
+                        : "pendente"}
                   </p>
                 </div>
               );
@@ -171,17 +184,12 @@ export function DashboardPage({
         ) : null}
       </Card>
 
-      {visibleBlocks.length ? (
+      {visibleItems.length ? (
         <Card>
-          <h3 className="text-lg font-black text-white">Cockpit do dia</h3>
+          <h3 className="text-lg font-black text-white">Cards de hoje</h3>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            {visibleBlocks.map((block) => (
-              <div className="rounded-md bg-slate-950 px-3 py-2" key={block.id}>
-                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                  {block.blockMode ?? "checklist"} {block.required ? "· essencial" : "· apoio"}
-                </p>
-                <p className="mt-1 font-bold text-slate-100">{block.name}</p>
-              </div>
+            {visibleItems.map((item) => (
+              <DashboardItemCard item={item} key={item.id} workout={workout} />
             ))}
           </div>
         </Card>
@@ -335,6 +343,29 @@ function PenaltyStat({ label, value }: { label: string; value: number | string }
   );
 }
 
+function DashboardItemCard({ item, workout }: { item: Exercise; workout: Workout }) {
+  const name = item.displayName ?? item.name;
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-md bg-slate-950 px-3 py-2">
+      <div className="min-w-0">
+        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+          {(item.kind ?? item.type).replaceAll("_", " ")}
+        </p>
+        <p className="mt-1 truncate font-bold text-slate-100">{name}</p>
+      </div>
+      <button
+        aria-label={`Pesquisar video para ${name}`}
+        className="tap-target inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-700 text-slate-300 transition hover:border-teal-300 hover:text-teal-200"
+        onClick={() => openReferenceVideoSearch(item, workout)}
+        title="Pesquisar video"
+        type="button"
+      >
+        <Search size={15} />
+      </button>
+    </div>
+  );
+}
+
 function AgendaInsight({ insight }: { insight: TrainingInsight }) {
   const tone =
     insight.tone === "warning"
@@ -353,7 +384,7 @@ function AgendaInsight({ insight }: { insight: TrainingInsight }) {
 
 function getDayEventLabel(event: DayEvent): string {
   if (event.status === "partial") {
-    return "missao composta parcial";
+    return "missao parcial - retome abaixo ou marque descanso de recuperacao";
   }
   if (event.status === "completed") {
     return "missão concluída";
