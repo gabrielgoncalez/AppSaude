@@ -7,6 +7,7 @@ import {
   getProgressionSuggestion,
   type ProgressionSuggestion,
 } from "./progression";
+import { getCompletedWorkSets, getMaxWorkWeight, getTotalWorkReps } from "./sets";
 
 export type PlanExercise = {
   workoutId: string;
@@ -104,10 +105,7 @@ export function getExerciseAnalysis(
   const sessionPoints = matchingSessions.map(({ session, log }) => ({
     date: session.date,
     maxWeightKg: getMaxWeight(log),
-    totalReps: log.sets.reduce(
-      (sum, set) => sum + (set.completed ? (set.reps ?? 0) : 0),
-      0,
-    ),
+    totalReps: getTotalWorkReps(log),
   }));
 
   return {
@@ -184,8 +182,8 @@ export function getRepsByWeight(
     session.exercises
       .filter((log) => matchesExerciseId(log.exerciseId, exerciseId, exercise))
       .forEach((log) => {
-        log.sets.forEach((set) => {
-          if (!set.completed || !set.weightKg) {
+        getCompletedWorkSets(log).forEach((set) => {
+          if (!set.weightKg) {
             return;
           }
           totals.set(set.weightKg, (totals.get(set.weightKg) ?? 0) + (set.reps ?? 0));
@@ -239,7 +237,7 @@ function createEmptyAnalysis(emptyHint: string): ExerciseAnalysis {
 }
 
 function getMaxWeight(log: ExerciseLog): number {
-  return Math.max(...log.sets.map((set) => set.weightKg ?? 0), 0);
+  return getMaxWorkWeight(log);
 }
 
 function getVariantLabel(exercise: Exercise): string {

@@ -8,7 +8,16 @@ import {
   getWaveRepRangeLabel,
 } from "../../lib/progression";
 import { openReferenceVideoSearch } from "../../lib/referenceSearch";
+import { isWorkSet } from "../../lib/sets";
 import type { WavePrescription } from "../../lib/waveEngine";
+import {
+  getEffectiveWarmupSets,
+  getSetKindForIndex,
+  getTotalDisplayedSets,
+  getWarmupLoadRange,
+  getWorkSetNumber,
+  isFinalWorkSet,
+} from "../../lib/workoutFlow";
 import type { Exercise, ExerciseLog, SetLog, TrainingSession, Workout } from "../../types/training";
 import { SetLogger } from "./SetLogger";
 
@@ -36,14 +45,21 @@ export function ExerciseCard({
   onFinishExerciseSet,
 }: ExerciseCardProps) {
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const lastSet = log?.sets.at(-1);
+  const targetSets = prescription?.targetSets ?? exercise.targetSets;
+  const warmupSets = getEffectiveWarmupSets(exercise.warmupSets);
+  const displayTotalSets = getTotalDisplayedSets(targetSets, warmupSets);
+  const nextIndex = (log?.sets.length ?? 0) + 1;
+  const setKind = getSetKindForIndex(nextIndex, warmupSets);
+  const workSetNumber = getWorkSetNumber(nextIndex, warmupSets);
+  const lastWorkSet = setKind === "work"
+    ? [...(log?.sets ?? [])].reverse().find((set) => set.completed && isWorkSet(set))
+    : undefined;
   const history = getExerciseProgressionHistory(exercise, sessions, currentSessionId);
   const suggestion = getProgressionSuggestion(exercise, log, history);
   const range =
     prescription?.repMin && prescription.repMax
       ? `${prescription.repMin}-${prescription.repMax} reps`
       : getWaveRepRangeLabel(exercise);
-  const targetSets = prescription?.targetSets ?? exercise.targetSets;
   const restSec = prescription?.restSec ?? exercise.restSec;
   const displayName = exercise.displayName ?? exercise.name;
   const usesDurationMetric =
@@ -74,12 +90,19 @@ export function ExerciseCard({
           </div>
           <div className="mt-2 flex flex-wrap gap-2 text-xs font-bold text-slate-300">
             <span className="rounded-md bg-slate-800 px-2 py-1">
-              {targetSets} séries
+              {warmupSets
+                ? `${displayTotalSets} séries (${targetSets} trabalho)`
+                : `${targetSets} séries`}
             </span>
             <span className="rounded-md bg-slate-800 px-2 py-1">{range}</span>
             <span className="rounded-md bg-slate-800 px-2 py-1">
               {restSec}s descanso
             </span>
+            {warmupSets ? (
+              <span className="rounded-md bg-orange-400/15 px-2 py-1 text-orange-100">
+                {warmupSets} aquecimento{exercise.warmupOptional ? " opcional" : ""}
+              </span>
+            ) : null}
             {prescription?.variantLabel ? (
               <span className="rounded-md bg-orange-400/10 px-2 py-1 text-orange-100">
                 {prescription.variantLabel}
@@ -146,6 +169,12 @@ export function ExerciseCard({
               {exercise.note}
             </p>
           ) : null}
+
+          {exercise.warmupNote ? (
+            <p className="rounded-md border border-teal-400/25 bg-teal-400/10 px-3 py-2 text-sm text-teal-100">
+              {exercise.warmupNote}
+            </p>
+          ) : null}
         </div>
       ) : null}
 
@@ -162,7 +191,12 @@ export function ExerciseCard({
             <tbody>
               {log.sets.map((set) => (
                 <tr className="border-t border-slate-800 text-slate-200" key={set.setIndex}>
-                  <td className="px-3 py-2 font-bold">{set.setIndex}</td>
+                  <td className="px-3 py-2 font-bold">
+                    {set.setIndex}
+                    <span className="ml-2 text-xs uppercase text-slate-500">
+                      {set.setKind === "warmup" ? "aquec." : "trab."}
+                    </span>
+                  </td>
                   <td className="px-3 py-2">{set.weightKg ?? 0} kg</td>
                   <td className="px-3 py-2">
                     {usesDurationMetric ? `${set.durationSec ?? "-"}s` : (set.reps ?? "-")}
@@ -176,18 +210,51 @@ export function ExerciseCard({
 
       <div className="mt-4">
         <SetLogger
-          lastSet={lastSet}
-          initialReps={prescription?.repMin ?? exercise.repMin ?? 8}
+          displayTotalSets={displayTotalSets}
           initialDurationSec={exercise.durationSec}
+          initialReps={prescription?.repMin ?? exercise.repMin ?? 8}
+          isFinalSet={isFinalWorkSet(nextIndex, targetSets, warmupSets)}
+          lastSet={lastWorkSet}
           metricMode={usesDurationMetric ? "duration" : "reps"}
-          nextIndex={(log?.sets.length ?? 0) + 1}
+          nextIndex={nextIndex}
           onFinishExerciseSet={(set) => onFinishExerciseSet(exercise, set)}
           onSaveSet={(set) => onAddSet(exercise, set)}
-          previousSet={previousSet}
+          onSkipWarmup={() =>
+            onAddSet(exercise, {
+              setIndex: nextIndex,
+              setKind: "warmup",
+              completed: false,
+              notes: "Aquecimento opcional pulado.",
+            })
+          }
+          previousSet={setKind === "work" ? previousSet : undefined}
+          setKind={setKind}
+          setLabel={setKind === "warmup" ? "Aquecimento" : `Trabalho ${workSetNumber} de ${targetSets}`}
           targetSets={targetSets}
+          warmupNote={exercise.warmupNote}
+          warmupSuggestion={getWarmupSuggestion(exercise, previousSet)}
+          warmupOptional={exercise.warmupOptional}
           weightLabel={weightLabel}
         />
       </div>
     </Card>
   );
+}
+
+function getWarmupSuggestion(exercise: Exercise, previousSet?: SetLog): string {
+  if (exercise.id === "graviton" || (exercise.incrementKg ?? 0) < 0) {
+    return previousSet?.weightKg
+      ? `Use mais assistência que nas séries de trabalho. Última assistência de trabalho: ${formatKg(previousSet.weightKg)}.`
+      : "Não temos dado salvo, comece leve. No Graviton, isso significa usar mais assistência.";
+  }
+
+  if (!previousSet?.weightKg) {
+    return "Não temos dado salvo, comece leve.";
+  }
+
+  const range = getWarmupLoadRange(previousSet.weightKg);
+  if (!range) {
+    return "Não temos dado salvo, comece leve.";
+  }
+  return `Sugestão visual: aquecer entre ${formatKg(range.minKg)} e ${formatKg(range.maxKg)} (40-50% da última carga de trabalho). Ajuste manualmente.`;
 }

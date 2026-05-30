@@ -36,6 +36,31 @@ export type TodayPrescription = {
   shortMessage: string;
 };
 
+const LEGACY_STRENGTH_WARMUP_ARTIFACTS = [
+  "Aquecimento Específico",
+  "Leg Press leve",
+  "Leg Press moderado",
+  "Supino leve",
+  "Supino Inclinado leve",
+  "Stiff com halteres leves",
+  "Stiff leve",
+  "Stiff com carga moderada",
+  "Remada leve",
+  "Graviton leve",
+  "Agachamento sem carga",
+  "Agachamento com carga leve",
+  "Dobradiça de quadril sem carga",
+  "a-aquecimento",
+  "b-aquecimento",
+  "c-aquecimento",
+];
+
+const STRENGTH_WARMUP_TYPES = new Set([
+  "strength",
+  "hypertrophy",
+  "strength_technical",
+]);
+
 export function getTodayPrescription(
   data: AppData,
   workout: Workout,
@@ -86,6 +111,7 @@ export function getPrescribedBlocks(
       const selectedItems = getExercisesForWave(blockWorkout, wave)
         .filter((exercise) => exercise.active !== false)
         .filter((exercise) => exercise.phaseAvailability !== "future")
+        .filter((exercise) => !isLegacyStrengthWarmupItem(workout, block, exercise))
         .map((exercise) => ({
           ...prescribeExercise(exercise, wave, data, date),
           blockId: block.id,
@@ -95,6 +121,37 @@ export function getPrescribedBlocks(
       return { ...block, items: selectedItems };
     })
     .filter((block) => block.items.length > 0);
+}
+
+function isLegacyStrengthWarmupItem(
+  workout: Workout,
+  block: WorkoutBlock,
+  exercise: Exercise,
+): boolean {
+  if (workout.modality !== "strength") {
+    return false;
+  }
+
+  const haystack = [
+    block.id,
+    block.name,
+    exercise.id,
+    exercise.name,
+    exercise.displayName,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  if (LEGACY_STRENGTH_WARMUP_ARTIFACTS.some((artifact) => haystack.includes(artifact))) {
+    return true;
+  }
+
+  if (block.type !== "warmup") {
+    return false;
+  }
+
+  return STRENGTH_WARMUP_TYPES.has(exercise.type) ||
+    STRENGTH_WARMUP_TYPES.has(exercise.kind ?? "");
 }
 
 export function getExercisesForWave(workout: Workout, wave: WaveType): Exercise[] {

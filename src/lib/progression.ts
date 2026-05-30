@@ -6,6 +6,7 @@ import {
 } from "date-fns";
 import type { Exercise, ExerciseLog, TrainingSession } from "../types/training";
 import { getLumbarSafetyAlert, hasExerciseAlert } from "./safety";
+import { getCompletedWorkSets, getMaxWorkWeight } from "./sets";
 
 const WAVE_REP_MIN = 8;
 const WAVE_REP_MAX = 15;
@@ -113,7 +114,14 @@ export function getProgressionSuggestion(
     };
   }
 
-  const completedSets = log.sets.filter((set) => set.completed);
+  const completedSets = getCompletedWorkSets(log);
+  if (completedSets.length === 0) {
+    return {
+      level: "info",
+      title: "Aquecimento registrado",
+      message: "Agora registre as series de trabalho para eu calcular progressao real.",
+    };
+  }
   const highRpe = completedSets.some((set) => (set.rpe ?? 0) >= 9);
   if (highRpe) {
     return {
@@ -199,7 +207,7 @@ export function formatKg(value: number): string {
 }
 
 function getMaxSetWeight(log: ExerciseLog): number {
-  return Math.max(...log.sets.map((set) => set.weightKg ?? 0), 0);
+  return getMaxWorkWeight(log);
 }
 
 function getPositiveIncrement(exercise: Exercise): number {

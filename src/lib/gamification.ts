@@ -4,6 +4,7 @@ import type { Reward } from "../types/rewards";
 import type { TrainingSession } from "../types/training";
 import { weekKey } from "./dates";
 import { getTotalCoinsPenalty } from "./penaltyEngine";
+import { isWorkSet } from "./sets";
 import { isExerciseFinished } from "./safety";
 
 export const XP_RULES = {
@@ -73,7 +74,9 @@ export function calculateSessionXp(session: TrainingSession): number {
   );
   const setXp = xpEligibleExercises.reduce(
     (sum, exercise) =>
-      sum + exercise.sets.filter((set) => set.completed).length * XP_RULES.setLogged,
+      sum +
+      exercise.sets.filter((set) => set.completed && isWorkSet(set)).length *
+        XP_RULES.setLogged,
     0,
   );
   const exerciseXp =

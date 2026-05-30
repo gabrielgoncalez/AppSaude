@@ -1,6 +1,7 @@
 import type { ExerciseLog, TrainingSession, Workout } from "../types/training";
 import { getActiveExercises } from "./exerciseAnalytics";
 import { formatKg } from "./progression";
+import { countCompletedWorkSets, getCompletedWorkSets, getMaxWorkWeight } from "./sets";
 
 export type WorkoutNewMax = {
   exerciseId: string;
@@ -36,7 +37,7 @@ export function buildWorkoutSummary({
   const completedExercises = activeExercises.length
     ? activeExercises.filter((exercise) => {
         const log = session.exercises.find((candidate) => candidate.exerciseId === exercise.id);
-        const completedSets = log?.sets.filter((set) => set.completed).length ?? 0;
+        const completedSets = countCompletedWorkSets(log);
         return Boolean(log?.completed) || completedSets >= exercise.targetSets;
       }).length
     : session.status === "completed"
@@ -93,14 +94,14 @@ function getPreviousMax(
     ...sessions.flatMap((session) =>
       session.exercises
         .filter((log) => log.exerciseId === exerciseId)
-        .flatMap((log) => log.sets.map((set) => set.weightKg ?? 0)),
+        .flatMap((log) => getCompletedWorkSets(log).map((set) => set.weightKg ?? 0)),
     ),
     0,
   );
 }
 
 function getMaxWeight(log: ExerciseLog): number {
-  return Math.max(...log.sets.map((set) => set.weightKg ?? 0), 0);
+  return getMaxWorkWeight(log);
 }
 
 function getNextSuggestion({

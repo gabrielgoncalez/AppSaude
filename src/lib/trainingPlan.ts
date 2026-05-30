@@ -11,6 +11,25 @@ import { withDerivedExercises } from "./workoutItems";
 export const WAVE_REP_MIN = 8;
 export const WAVE_REP_MAX = 15;
 
+const LEGACY_WARMUP_ARTIFACTS = [
+  "Aquecimento Específico",
+  "Leg Press leve",
+  "Leg Press moderado",
+  "Supino leve",
+  "Supino Inclinado leve",
+  "Stiff com halteres leves",
+  "Stiff leve",
+  "Stiff com carga moderada",
+  "Remada leve",
+  "Graviton leve",
+  "Agachamento sem carga",
+  "Agachamento com carga leve",
+  "Dobradiça de quadril sem carga",
+  "a-aquecimento-especifico",
+  "b-aquecimento-especifico",
+  "c-aquecimento-especifico",
+];
+
 export function normalizeAppDataForWave(data: AppData): {
   data: AppData;
   changed: boolean;
@@ -131,6 +150,10 @@ function shouldUpgradeToMasterPlan(plan: TrainingPlan): boolean {
 }
 
 function isStructuredMasterPlan(plan: TrainingPlan): boolean {
+  if (hasLegacyWarmupArtifacts(plan)) {
+    return false;
+  }
+
   const workoutsById = new Map(plan.workouts.map((workout) => [workout.id, workout]));
   const requiredWorkoutIds = [
     "treino-a",
@@ -146,6 +169,11 @@ function isStructuredMasterPlan(plan: TrainingPlan): boolean {
     const workout = workoutsById.get(id);
     return Boolean(workout?.workoutBlocks?.length);
   });
+}
+
+function hasLegacyWarmupArtifacts(plan: TrainingPlan): boolean {
+  const serialized = JSON.stringify(plan);
+  return LEGACY_WARMUP_ARTIFACTS.some((artifact) => serialized.includes(artifact));
 }
 
 function cloneTrainingPlan(plan: TrainingPlan): TrainingPlan {

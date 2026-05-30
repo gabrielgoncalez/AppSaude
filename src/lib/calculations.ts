@@ -2,6 +2,7 @@ import { format, parseISO, subDays } from "date-fns";
 import type { AppData, BodyCheckin, DayEvent } from "../types/appData";
 import type { ExerciseLog, TrainingSession } from "../types/training";
 import { weekKey } from "./dates";
+import { getCompletedWorkSets, getMaxWorkWeight, getTotalWorkReps } from "./sets";
 
 export type ChartPoint = {
   name: string;
@@ -9,8 +10,8 @@ export type ChartPoint = {
 };
 
 export function calculateExerciseVolume(exercise: ExerciseLog): number {
-  return exercise.sets.reduce(
-    (sum, set) => sum + (set.completed ? (set.weightKg ?? 0) * (set.reps ?? 0) : 0),
+  return getCompletedWorkSets(exercise).reduce(
+    (sum, set) => sum + (set.weightKg ?? 0) * (set.reps ?? 0),
     0,
   );
 }
@@ -81,7 +82,7 @@ export function getExerciseLoadTrend(
             day: "2-digit",
             month: "2-digit",
           }),
-          value: Math.max(...exercise.sets.map((set) => set.weightKg ?? 0), 0),
+          value: getMaxWorkWeight(exercise),
         })),
     )
     .filter((point) => point.value > 0);
@@ -100,7 +101,7 @@ export function getExerciseRepsTrend(
             day: "2-digit",
             month: "2-digit",
           }),
-          value: exercise.sets.reduce((sum, set) => sum + (set.reps ?? 0), 0),
+          value: getTotalWorkReps(exercise),
         })),
     )
     .filter((point) => point.value > 0);
@@ -112,7 +113,7 @@ export function getRecentPrs(sessions: TrainingSession[], limit = 5): string[] {
 
   sessions.forEach((session) => {
     session.exercises.forEach((exercise) => {
-      const load = Math.max(...exercise.sets.map((set) => set.weightKg ?? 0), 0);
+      const load = getMaxWorkWeight(exercise);
       const previous = best.get(exercise.exerciseId) ?? 0;
       if (load > previous) {
         best.set(exercise.exerciseId, load);

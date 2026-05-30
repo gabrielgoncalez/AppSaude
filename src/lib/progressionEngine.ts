@@ -1,4 +1,5 @@
 import type { TrainingSession } from "../types/training";
+import { getCompletedWorkSets, getMaxWorkWeight, isWorkSet } from "./sets";
 
 export type PrEvent = {
   id: string;
@@ -16,7 +17,7 @@ export function detectSessionPrs(
 ): PrEvent[] {
   return session.exercises.flatMap((exercise) => {
     const prs: PrEvent[] = [];
-    const maxWeight = Math.max(...exercise.sets.map((set) => set.weightKg ?? 0), 0);
+    const maxWeight = getMaxWorkWeight(exercise);
     const previousMax = getPreviousMaxWeight(previousSessions, exercise.exerciseId);
     if (maxWeight > previousMax) {
       prs.push({
@@ -32,7 +33,7 @@ export function detectSessionPrs(
     }
 
     const sameWeightReps = exercise.sets
-      .filter((set) => set.completed && (set.weightKg ?? 0) === maxWeight)
+      .filter((set) => set.completed && isWorkSet(set) && (set.weightKg ?? 0) === maxWeight)
       .reduce((sum, set) => sum + (set.reps ?? 0), 0);
     const previousSameWeightReps = getPreviousBestRepsAtWeight(
       previousSessions,
@@ -90,7 +91,7 @@ function getPreviousMaxWeight(
     ...sessions.flatMap((session) =>
       session.exercises
         .filter((exercise) => exercise.exerciseId === exerciseId)
-        .flatMap((exercise) => exercise.sets.map((set) => set.weightKg ?? 0)),
+        .flatMap((exercise) => getCompletedWorkSets(exercise).map((set) => set.weightKg ?? 0)),
     ),
     0,
   );
@@ -107,7 +108,7 @@ function getPreviousBestRepsAtWeight(
         .filter((exercise) => exercise.exerciseId === exerciseId)
         .map((exercise) =>
           exercise.sets
-            .filter((set) => set.completed && (set.weightKg ?? 0) === weightKg)
+            .filter((set) => set.completed && isWorkSet(set) && (set.weightKg ?? 0) === weightKg)
             .reduce((sum, set) => sum + (set.reps ?? 0), 0),
         ),
     ),

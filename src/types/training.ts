@@ -122,6 +122,8 @@ export type TechnicalBlockLog = {
   items: TechnicalItemLog[];
 };
 
+export type SetKind = "warmup" | "work";
+
 export type WaveSlot = "volume" | "volume_2" | "strength" | "consolidation";
 
 export type ExerciseVariantRole =
@@ -149,6 +151,9 @@ export type Exercise = {
   variantWaves?: WaveSlot[];
   variantNote?: string;
   targetSets: number;
+  warmupSets?: number;
+  warmupOptional?: boolean;
+  warmupNote?: string;
   repMin?: number;
   repMax?: number;
   durationSec?: number;
@@ -228,6 +233,7 @@ export type TrainingPlan = {
 
 export type SetLog = {
   setIndex: number;
+  setKind?: SetKind;
   weightKg?: number;
   reps?: number;
   durationSec?: number;

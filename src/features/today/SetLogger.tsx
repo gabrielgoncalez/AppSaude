@@ -1,20 +1,27 @@
 import { CheckCircle2, Minus, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "../../components/Button";
-import { getSetActionLabel, isFinalExerciseSet } from "../../lib/workoutFlow";
-import type { SetLog } from "../../types/training";
+import type { SetKind, SetLog } from "../../types/training";
 
 type SetLoggerProps = {
   lastSet?: SetLog;
   previousSet?: SetLog;
   nextIndex: number;
   targetSets: number;
+  displayTotalSets?: number;
+  setKind?: SetKind;
+  setLabel?: string;
+  isFinalSet?: boolean;
   initialReps?: number;
   initialDurationSec?: number;
   metricMode?: "reps" | "duration";
   weightLabel?: string;
+  warmupOptional?: boolean;
+  warmupNote?: string;
+  warmupSuggestion?: string;
   onSaveSet: (set: SetLog) => void;
   onFinishExerciseSet: (set: SetLog) => void;
+  onSkipWarmup?: () => void;
 };
 
 export function SetLogger({
@@ -22,26 +29,38 @@ export function SetLogger({
   previousSet,
   nextIndex,
   targetSets,
+  displayTotalSets = targetSets,
+  setKind = "work",
+  setLabel,
+  isFinalSet = false,
   initialReps = 8,
   initialDurationSec = 30,
   metricMode = "reps",
   weightLabel = "Carga kg",
+  warmupOptional = false,
+  warmupNote,
+  warmupSuggestion,
   onSaveSet,
   onFinishExerciseSet,
+  onSkipWarmup,
 }: SetLoggerProps) {
-  const base = useMemo(() => lastSet ?? previousSet, [lastSet, previousSet]);
+  const base = useMemo(
+    () => (setKind === "warmup" ? undefined : (lastSet ?? previousSet)),
+    [lastSet, previousSet, setKind],
+  );
   const [weightKg, setWeightKg] = useState<number>(base?.weightKg ?? 0);
   const [reps, setReps] = useState<number>(
     metricMode === "duration"
       ? (base?.durationSec ?? initialDurationSec)
       : (base?.reps ?? initialReps),
   );
-  const isFinalSet = isFinalExerciseSet(nextIndex, targetSets);
-  const actionLabel = getSetActionLabel(nextIndex, targetSets);
+  const actionLabel = isFinalSet ? "Finalizar exercício" : "Finalizar série";
+  const resolvedSetLabel = setLabel ?? (setKind === "warmup" ? "Aquecimento" : "Trabalho");
 
   function finishSet() {
-    const set = {
+    const set: SetLog = {
       setIndex: nextIndex,
+      setKind,
       weightKg,
       ...(metricMode === "duration" ? { durationSec: reps } : { reps }),
       completed: true,
@@ -63,13 +82,27 @@ export function SetLogger({
             Série
           </p>
           <p className="text-2xl font-black text-white">
-            {nextIndex} de {targetSets}
+            {nextIndex} de {displayTotalSets}
+          </p>
+          <p className="mt-1 text-xs font-bold uppercase tracking-wide text-slate-400">
+            {resolvedSetLabel}
+            {warmupOptional && setKind === "warmup" ? " opcional" : ""}
           </p>
         </div>
         <p className="rounded-md bg-slate-950 px-3 py-2 text-xs font-bold text-slate-300">
           ajuste e finalize
         </p>
       </div>
+
+      {setKind === "warmup" ? (
+        <div className="mt-3 space-y-2 rounded-md border border-orange-400/25 bg-orange-400/10 px-3 py-2 text-sm font-bold text-orange-100">
+          <p>
+            {warmupNote ??
+              "Série leve para preparar o padrão. Não conta para PR, volume ou progressão."}
+          </p>
+          {warmupSuggestion ? <p className="text-orange-50">{warmupSuggestion}</p> : null}
+        </div>
+      ) : null}
 
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <NumberStepper
@@ -82,7 +115,7 @@ export function SetLogger({
         />
         <NumberStepper
           inputMode="numeric"
-          label={metricMode === "duration" ? "Tempo (s)" : "Repeticoes"}
+          label={metricMode === "duration" ? "Tempo (s)" : "Repetições"}
           onChange={setReps}
           step={metricMode === "duration" ? 5 : 1}
           value={reps}
@@ -92,6 +125,11 @@ export function SetLogger({
       <Button className="mt-3 w-full" icon={<CheckCircle2 size={16} />} onClick={finishSet}>
         {actionLabel}
       </Button>
+      {setKind === "warmup" && warmupOptional && onSkipWarmup ? (
+        <Button className="mt-2 w-full" onClick={onSkipWarmup} variant="ghost">
+          Pular aquecimento
+        </Button>
+      ) : null}
     </div>
   );
 }
@@ -136,9 +174,12 @@ function NumberStepper({
         <input
           className="min-w-0 bg-transparent px-2 py-3 text-center text-xl font-black text-white outline-none"
           inputMode={inputMode}
-          min={0}
-          onChange={(event) => update(Number(event.target.value))}
-          type="number"
+          onChange={(event) => {
+            const parsed = Number(event.target.value.replace(",", "."));
+            if (!Number.isNaN(parsed)) {
+              onChange(parsed);
+            }
+          }}
           value={formatted}
         />
         <button

@@ -38,6 +38,7 @@ import { buildWorkoutSummary, type WorkoutSummary } from "./lib/postWorkout";
 import { getPrBonus } from "./lib/progressionEngine";
 import { getTodayPrescription } from "./lib/prescriptionEngine";
 import type { PrescribedBlock } from "./lib/prescriptionEngine";
+import { countCompletedWorkSets, isWorkSet } from "./lib/sets";
 import {
   getCompletionKey,
   isDailyBlockCompleted,
@@ -52,7 +53,7 @@ import {
 } from "./services/authService";
 import {
   clearProgressData,
-  ensureUserData,
+  loadOrCreateAppData,
   replaceAppData,
   resetAppData,
   saveAppData,
@@ -115,9 +116,8 @@ export default function App() {
   const [workoutSummary, setWorkoutSummary] = useState<WorkoutSummary | undefined>();
   const [checkinInsight, setCheckinInsight] = useState<CheckinInsight | undefined>();
   const suppressCloudSyncRef = useRef(false);
-  const pendingWriteRef = useRef<{ data: AppData; until: number } | undefined>(
-    undefined,
-  );
+  const pendingWriteRef = useRef<{ data: AppData } | undefined>(undefined);
+  const latestDataRef = useRef<AppData | undefined>(undefined);
 
   useEffect(() => {
     return subscribeAuth(
@@ -127,9 +127,13 @@ export default function App() {
         setError("");
         if (!user) {
           setData(undefined);
+          latestDataRef.current = undefined;
+          pendingWriteRef.current = undefined;
           setDataLoading(false);
         } else {
           setData(undefined);
+          latestDataRef.current = undefined;
+          pendingWriteRef.current = undefined;
           setDataLoading(true);
         }
       },
@@ -145,63 +149,108 @@ export default function App() {
       return;
     }
 
+    const uid = authUser.uid;
     let unsubscribe: (() => void) | undefined;
     let cancelled = false;
+    const syncTimeout = window.setTimeout(() => {
+      if (!cancelled) {
+        setError(
+          "O Firestore demorou para responder. Verifique a conexao e tente recarregar.",
+        );
+        setDataLoading(false);
+      }
+    }, 20000);
 
-    ensureUserData(authUser.uid)
-      .then(() => {
-        if (cancelled) {
+    function applyLoadedData(
+      next: AppData,
+      options: { source: "cloud" | "local"; before?: AppData; persistDerived?: boolean },
+    ): boolean {
+      if (suppressCloudSyncRef.current && options.source === "cloud") {
+        return false;
+      }
+      const before = options.before ?? next;
+      const normalized = normalizeAppDataForWave(next);
+      const resolved = resolvePendingDays(normalized.data);
+      const pendingWrite = pendingWriteRef.current;
+      if (
+        options.source === "cloud" &&
+        pendingWrite &&
+        isCloudSnapshotOlderThanPending(resolved.data, pendingWrite.data)
+      ) {
+        return false;
+      }
+      if (
+        options.source === "cloud" &&
+        latestDataRef.current &&
+        isCloudSnapshotOlderThanPending(resolved.data, latestDataRef.current)
+      ) {
+        pendingWriteRef.current = { data: latestDataRef.current };
+        void saveAppData(uid, latestDataRef.current).catch((reason: unknown) => {
+          setError(getSyncErrorMessage(reason));
+        });
+        return false;
+      }
+      if (
+        options.source === "cloud" &&
+        pendingWrite &&
+        !isCloudSnapshotOlderThanPending(resolved.data, pendingWrite.data)
+      ) {
+        pendingWriteRef.current = undefined;
+      }
+
+      latestDataRef.current = resolved.data;
+      setData(resolved.data);
+      setDataLoading(false);
+      if (options.source === "cloud") {
+        setError("");
+      }
+      if (options.persistDerived && (normalized.changed || resolved.changed)) {
+        void saveDerivedAppData(uid, before, resolved.data).catch((reason: unknown) => {
+          setError(getSyncErrorMessage(reason, "Erro ao resolver agenda."));
+        });
+      }
+      return true;
+    }
+
+    loadOrCreateAppData(uid)
+      .then((next) => {
+        if (cancelled || !next) {
           return;
         }
 
+        window.clearTimeout(syncTimeout);
+        applyLoadedData(next, {
+          source: "cloud",
+          before: next,
+          persistDerived: true,
+        });
+
         unsubscribe = subscribeToAppData(
-          authUser.uid,
+          uid,
           (next) => {
-            if (suppressCloudSyncRef.current) {
-              return;
-            }
-            const before = next;
-            const normalized = normalizeAppDataForWave(next);
-            const resolved = resolvePendingDays(normalized.data);
-            const pendingWrite = pendingWriteRef.current;
-            if (
-              pendingWrite &&
-              Date.now() < pendingWrite.until &&
-              isCloudSnapshotOlderThanPending(resolved.data, pendingWrite.data)
-            ) {
-              return;
-            }
-            if (
-              pendingWrite &&
-              !isCloudSnapshotOlderThanPending(resolved.data, pendingWrite.data)
-            ) {
-              pendingWriteRef.current = undefined;
-            }
-            setData(resolved.data);
-            setDataLoading(false);
-            if (normalized.changed || resolved.changed) {
-              void saveDerivedAppData(authUser.uid, before, resolved.data).catch((reason: unknown) => {
-                setError(
-                  reason instanceof Error
-                    ? reason.message
-                    : "Erro ao resolver agenda.",
-                );
-              });
-            }
+            window.clearTimeout(syncTimeout);
+            applyLoadedData(next, {
+              source: "cloud",
+              before: next,
+              persistDerived: true,
+            });
           },
           (reason) => {
+            window.clearTimeout(syncTimeout);
             setError(reason.message);
             setDataLoading(false);
           },
         );
       })
       .catch((reason: unknown) => {
-        setError(reason instanceof Error ? reason.message : "Erro ao carregar dados.");
+        window.clearTimeout(syncTimeout);
+        setError(getSyncErrorMessage(reason, "Erro ao carregar dados."));
         setDataLoading(false);
       });
 
     return () => {
       cancelled = true;
+      window.clearTimeout(syncTimeout);
       unsubscribe?.();
     };
   }, [authUser]);
@@ -271,7 +320,9 @@ export default function App() {
       .forEach((session) =>
         session.exercises.forEach((exercise) => {
           if (!map.has(exercise.exerciseId)) {
-            const set = [...exercise.sets].reverse().find((item) => item.completed);
+            const set = [...exercise.sets]
+              .reverse()
+              .find((item) => item.completed && isWorkSet(item));
             if (set) {
               map.set(exercise.exerciseId, set);
             }
@@ -293,16 +344,11 @@ export default function App() {
       return;
     }
 
-    pendingWriteRef.current = { data: next, until: Date.now() + 1500 };
+    pendingWriteRef.current = { data: next };
+    latestDataRef.current = next;
     setData(next);
     void saveAppData(authUser.uid, next).catch((reason: unknown) => {
-      setError(reason instanceof Error ? reason.message : "Erro ao sincronizar dados.");
-    }).finally(() => {
-      setTimeout(() => {
-        if (pendingWriteRef.current?.data === next) {
-          pendingWriteRef.current = undefined;
-        }
-      }, 250);
+      setError(getSyncErrorMessage(reason));
     });
   }
 
@@ -397,8 +443,7 @@ export default function App() {
         return {
           ...log,
           sets,
-          completed:
-            sets.filter((candidate) => candidate.completed).length >= exercise.targetSets,
+          completed: countCompletedWorkSets({ sets }) >= exercise.targetSets,
         };
       });
       return syncSessionExerciseCompletion({
@@ -415,7 +460,7 @@ export default function App() {
       const exercises = upsertExercise(session.exercises, exercise, (log) => ({
         ...log,
         sets: [...log.sets, set],
-        completed: true,
+        completed: countCompletedWorkSets({ sets: [...log.sets, set] }) >= exercise.targetSets,
       }));
       return syncSessionExerciseCompletion({
         ...session,
@@ -692,7 +737,9 @@ export default function App() {
     }
 
     suppressCloudSyncRef.current = true;
-    await resetAppData(authUser.uid);
+    const next = await resetAppData(authUser.uid);
+    latestDataRef.current = next;
+    setData(next);
     setTimeout(() => {
       suppressCloudSyncRef.current = false;
     }, 750);
@@ -722,10 +769,11 @@ export default function App() {
     });
     setWorkoutSummary(undefined);
     setCheckinInsight(undefined);
+    latestDataRef.current = next;
     setData(next);
     suppressCloudSyncRef.current = true;
     void clearProgressData(authUser.uid, next).catch((reason: unknown) => {
-      setError(reason instanceof Error ? reason.message : "Erro ao limpar testes.");
+      setError(getSyncErrorMessage(reason, "Erro ao limpar testes."));
     }).finally(() => {
       setTimeout(() => {
         suppressCloudSyncRef.current = false;
@@ -740,10 +788,11 @@ export default function App() {
     }
 
     const next = ensureSchedule(imported);
+    latestDataRef.current = next;
     setData(next);
     suppressCloudSyncRef.current = true;
     void replaceAppData(authUser.uid, next).catch((reason: unknown) => {
-      setError(reason instanceof Error ? reason.message : "Erro ao importar backup.");
+      setError(getSyncErrorMessage(reason, "Erro ao importar backup."));
     }).finally(() => {
       setTimeout(() => {
         suppressCloudSyncRef.current = false;
@@ -770,7 +819,27 @@ export default function App() {
     );
   }
 
-  if (dataLoading || !data || !workout || !nextWorkout) {
+  if (!data && error) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4 text-center text-slate-100">
+        <div className="w-full max-w-md rounded-lg border border-rose-400/35 bg-rose-500/10 p-4">
+          <p className="text-sm font-bold uppercase tracking-wide text-rose-200">
+            Erro ao sincronizar
+          </p>
+          <p className="mt-2 text-sm text-rose-50">{error}</p>
+          <button
+            className="mt-4 w-full rounded-md bg-cyan-400 px-4 py-3 text-sm font-bold text-slate-950"
+            onClick={() => window.location.reload()}
+            type="button"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (dataLoading || !data) {
     return (
       <div className="flex min-h-screen items-center justify-center px-4 text-center text-slate-100">
         Sincronizando seus dados...
@@ -785,6 +854,28 @@ export default function App() {
         onStart={startJourney}
         user={authUser}
       />
+    );
+  }
+
+  if (!workout || !nextWorkout) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4 text-center text-slate-100">
+        <div className="w-full max-w-md rounded-lg border border-amber-400/35 bg-amber-500/10 p-4">
+          <p className="text-sm font-bold uppercase tracking-wide text-amber-200">
+            Agenda incompleta
+          </p>
+          <p className="mt-2 text-sm text-amber-50">
+            O plano carregou, mas a agenda nao encontrou o treino de hoje.
+          </p>
+          <button
+            className="mt-4 w-full rounded-md bg-cyan-400 px-4 py-3 text-sm font-bold text-slate-950"
+            onClick={() => window.location.reload()}
+            type="button"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      </div>
     );
   }
 
@@ -974,6 +1065,18 @@ function isCloudSnapshotOlderThanPending(
   incoming: AppData,
   pending: AppData,
 ): boolean {
+  if (pending.settings.onboardingDone && !incoming.settings.onboardingDone) {
+    return true;
+  }
+  if (incoming.sessions.length < pending.sessions.length) {
+    return true;
+  }
+  if (incoming.dayEvents.length < pending.dayEvents.length) {
+    return true;
+  }
+  if (incoming.bodyCheckins.length < pending.bodyCheckins.length) {
+    return true;
+  }
   const incomingRevision = incoming.schedule.revision ?? 0;
   const pendingRevision = pending.schedule.revision ?? 0;
   if (incomingRevision !== pendingRevision) {
@@ -981,4 +1084,16 @@ function isCloudSnapshotOlderThanPending(
   }
 
   return incoming.schedule.updatedAt < pending.schedule.updatedAt;
+}
+
+function getSyncErrorMessage(reason: unknown, fallback = "Erro ao sincronizar dados."): string {
+  const code =
+    typeof reason === "object" && reason && "code" in reason
+      ? String(reason.code)
+      : "";
+  const message = reason instanceof Error ? reason.message : "";
+  if (code === "resource-exhausted" || /quota exceeded/i.test(message)) {
+    return "A quota de escrita do Firestore deste projeto acabou por hoje. O app ja esta otimizado para gravar em 1 documento compacto, mas o Firebase esta recusando novas escritas ate a quota liberar ou o billing ser habilitado.";
+  }
+  return message || fallback;
 }
