@@ -9,7 +9,7 @@ import type {
 } from "../types/training";
 
 export const MASTER_TRAINING_PLAN_ID = "gigante-agil-master-plan";
-export const MASTER_TRAINING_PLAN_VERSION = 6;
+export const MASTER_TRAINING_PLAN_VERSION = 7;
 
 type ExerciseInput = Omit<Exercise, "name" | "targetSets" | "restSec"> & {
   displayName: string;
@@ -313,46 +313,130 @@ const boxingBaseBody = [
   }),
 ];
 
+const danceCapoeiraWarmup = [
+  skill({
+    id: "danca-capoeira-aquecimento-ginga",
+    referenceId: "capoeira-ginga",
+    displayName: "Ginga",
+    type: "capoeira_movement",
+    kind: "capoeira_movement",
+    priority: "warmup",
+    durationSec: 180,
+    progressionModel: "spaced_review",
+    referenceSearchQuery: "Ginga capoeira Mestre Koioty",
+    note: "Aquecimento corporal com ritmo leve, base solta e respiracao fluida.",
+  }),
+  skill({
+    id: "danca-capoeira-aquecimento-esquiva-lateral",
+    referenceId: "capoeira-esquiva-lateral",
+    displayName: "Esquiva lateral",
+    type: "capoeira_movement",
+    kind: "capoeira_movement",
+    priority: "warmup",
+    durationSec: 120,
+    progressionModel: "spaced_review",
+    referenceSearchQuery: "Esquiva lateral capoeira Mestre Koioty",
+    note: "Entrar e sair com controle, sem buscar amplitude maxima.",
+  }),
+];
+
 const capoeiraBaseBody = [
   timed({
-    id: "capoeira-postura-cavalo",
-    displayName: "Postura do Cavalo",
+    id: "danca-postura-cavalo-ma-bu",
+    referenceId: "postura-cavalo-ma-bu",
+    displayName: "Postura do Cavalo / Ma Bu",
     type: "base_body",
-    kind: "core",
+    kind: "base_body",
     priority: "base",
-    durationSec: 30,
+    durationSec: 25,
+    variantWaves: ["volume", "volume_2", "consolidation"],
     metricSchema: ["durationSec", "quality1to5", "completed"],
     progressionModel: "time_progression",
-    referenceSearchQuery: "Postura do Cavalo capoeira Mestre Koioty",
-    note: "Revisar 2-3x por semana.",
+    referenceSearchQuery: "Ma Bu horse stance beginner",
+    note: "Base aberta, joelhos alinhados, tronco alto e respiracao solta.",
   }),
   timed({
-    id: "capoeira-prancha-alta-inclinada",
-    displayName: "Prancha Inclinada",
+    id: "danca-postura-arco-gong-bu",
+    referenceId: "postura-arco-gong-bu",
+    displayName: "Postura do Arco / Gong Bu",
     type: "base_body",
-    kind: "core",
-    priority: "base",
-    durationSec: 30,
-    referenceSearchQuery: "incline plank beginner",
-    note: "Quando ficar facil, evoluir para Prancha Alta.",
-  }),
-  timed({
-    id: "capoeira-ponte-gluteo-sustentada",
-    displayName: "Ponte de Glúteo Sustentada",
-    type: "base_body",
-    kind: "core",
-    priority: "base",
-    durationSec: 30,
-    referenceSearchQuery: "glute bridge hold beginner",
-  }),
-  timed({
-    id: "capoeira-prancha-lateral-joelho",
-    displayName: "Prancha Lateral com Joelho",
-    type: "base_body",
-    kind: "core",
+    kind: "base_body",
     priority: "base",
     durationSec: 20,
-    referenceSearchQuery: "knee side plank beginner",
+    variantWaves: ["volume", "strength"],
+    metricSchema: ["durationSec", "quality1to5", "completed"],
+    progressionModel: "time_progression",
+    referenceSearchQuery: "Gong Bu bow stance beginner",
+    note: "Peso distribuido, quadril encaixado e joelho da frente alinhado.",
+  }),
+  timed({
+    id: "danca-postura-vazia-xu-bu",
+    referenceId: "postura-vazia-xu-bu",
+    displayName: "Postura Vazia / Xu Bu",
+    type: "base_body",
+    kind: "base_body",
+    priority: "base",
+    durationSec: 20,
+    variantWaves: ["volume_2"],
+    metricSchema: ["durationSec", "quality1to5", "completed"],
+    progressionModel: "time_progression",
+    referenceSearchQuery: "Xu Bu empty stance beginner",
+    note: "Peso na perna de tras, pe da frente leve e postura alta.",
+  }),
+  timed({
+    id: "danca-postura-rasteira-pu-bu",
+    referenceId: "postura-rasteira-pu-bu",
+    displayName: "Postura Rasteira / Pu Bu",
+    type: "base_body",
+    kind: "base_body",
+    priority: "optional",
+    durationSec: 10,
+    variantWaves: ["strength"],
+    metricSchema: ["durationSec", "quality1to5", "completed"],
+    progressionModel: "time_progression",
+    referenceSearchQuery: "Pu Bu drop stance beginner",
+    note: "Opcional. Usar amplitude parcial no comeco e manter controle do joelho.",
+  }),
+  timed({
+    id: "danca-postura-cruzada-xie-bu",
+    referenceId: "postura-cruzada-xie-bu",
+    displayName: "Postura Cruzada / Xie Bu",
+    type: "base_body",
+    kind: "base_body",
+    priority: "optional",
+    durationSec: 10,
+    variantWaves: ["consolidation"],
+    metricSchema: ["durationSec", "quality1to5", "completed"],
+    progressionModel: "time_progression",
+    referenceSearchQuery: "Xie Bu crossed stance beginner",
+    note: "Opcional. Entrar parcial, manter equilibrio e sair com calma.",
+  }),
+];
+
+const danceCapoeiraReview = [
+  skill({
+    id: "danca-capoeira-revisao-ginga",
+    referenceId: "capoeira-ginga",
+    displayName: "Ginga",
+    type: "capoeira_movement",
+    kind: "capoeira_movement",
+    priority: "review",
+    durationSec: 180,
+    progressionModel: "spaced_review",
+    referenceSearchQuery: "Ginga capoeira Mestre Koioty",
+    note: "Revisao tecnica curta para manter base, ritmo e fluidez.",
+  }),
+  skill({
+    id: "danca-capoeira-revisao-banco",
+    referenceId: "capoeira-banco-revisao",
+    displayName: "Banco de revisao automatica",
+    type: "capoeira_movement",
+    kind: "capoeira_movement",
+    priority: "review",
+    durationSec: 300,
+    progressionModel: "spaced_review",
+    referenceSearchQuery: "capoeira movimentos iniciantes Mestre Koioty",
+    note: "Escolher 1-2 movimentos da biblioteca para revisar sem transformar em treino separado.",
   }),
 ];
 
@@ -1821,109 +1905,26 @@ const treinoC: Workout = {
 treinoC.exercises = treinoC.workoutBlocks?.find((item) => item.id === "c-musculacao")?.items;
 treinoC.blocks = workoutBlocks(treinoC);
 
-const capoeira: Workout = {
-  id: "capoeira",
-  name: "Capoeira - Técnica e Base Corporal",
-  dayOfWeek: 6,
-  type: "capoeira",
-  modality: "capoeira",
-  cycleOrder: 6,
-  sameDayGroupId: "sabado-capoeira-danca",
-  groupOrder: 1,
-  active: true,
-  note:
-    "A capoeira usa biblioteca própria de 50 movimentos. O app escolhe revisões por status, dificuldade e data de última revisão.",
-  workoutBlocks: [
-    block("capoeira-aquecimento", "Aquecimento Corporal de Capoeira", "warmup", [
-      timed({
-        id: "capoeira-aquecimento-geral",
-        displayName: "Aquecimento corporal",
-        type: "warmup",
-        durationSec: 480,
-        note: "Soltar quadril, tornozelo, ombro e coluna antes da técnica.",
-        referenceSearchQuery: "capoeira aquecimento iniciante",
-      }),
-    ]),
-    block("capoeira-base", "Base Corporal e Isometria", "base_body", [
-      ...capoeiraBaseBody,
-      skill({
-        id: "capoeira-esquiva-lateral",
-        displayName: "Esquiva lateral",
-        type: "capoeira_movement",
-        kind: "capoeira_movement",
-        priority: "review",
-        durationSec: 180,
-        progressionModel: "spaced_review",
-        referenceSearchQuery: "Esquiva lateral capoeira Mestre Koioty",
-      }),
-    ]),
-    block("capoeira-revisao-dominados", "Revisão de Movimentos Dominados", "review", [
-      skill({
-        id: "capoeira-revisao-ginga",
-        displayName: "Ginga",
-        type: "capoeira_movement",
-        kind: "capoeira_movement",
-        priority: "base",
-        durationSec: 300,
-        progressionModel: "spaced_review",
-        referenceSearchQuery: "Ginga capoeira Mestre Koioty",
-        note: "Sempre entra. A base da capoeira precisa aparecer toda semana.",
-      }),
-      skill({
-        id: "capoeira-revisao-banco",
-        displayName: "Banco de revisão automática",
-        type: "capoeira_movement",
-        kind: "capoeira_movement",
-        priority: "review",
-        durationSec: 600,
-        progressionModel: "spaced_review",
-        note:
-          "O app deve escolher 2-4 movimentos dominados, priorizando menos revisados e mais difíceis.",
-        referenceSearchQuery: "capoeira movimentos iniciantes Mestre Koioty",
-      }),
-    ]),
-    block("capoeira-movimento-novo", "Movimento Novo do Curso", "technical", [
-      skill({
-        id: "capoeira-movimento-novo-curso",
-        displayName: "Movimento novo do curso",
-        type: "capoeira_movement",
-        kind: "capoeira_movement",
-        priority: "technical",
-        durationSec: 900,
-        progressionModel: "spaced_review",
-        metricSchema: ["durationSec", "quality1to5", "completed"],
-        referenceSearchQuery: "capoeira Mestre Koioty movimento iniciante",
-        note: "Registrar status: não iniciado, aprendendo, validando, dominado ou revisão.",
-      }),
-    ], { required: true }),
-    block("capoeira-fechamento", "Fechamento Técnico de Capoeira", "cooldown", [
-      timed({
-        id: "capoeira-fechamento-tecnico",
-        displayName: "Fechamento técnico",
-        type: "cooldown",
-        durationSec: 300,
-        note: "Repetição leve, respiração e anotação rápida.",
-        referenceSearchQuery: "capoeira alongamento final treino",
-      }),
-    ]),
-  ],
-};
-
-capoeira.blocks = workoutBlocks(capoeira);
-
 const danca: Workout = {
   id: "danca",
-  name: "Dança - Steezy + Flow",
+  name: "Dança + Capoeira Corporal",
   dayOfWeek: 6,
   type: "dance",
   modality: "dance",
-  cycleOrder: 7,
-  sameDayGroupId: "sabado-capoeira-danca",
-  groupOrder: 2,
+  cycleOrder: 6,
   active: true,
   note:
-    "A progressão do curso fica no Steezy. O app registra execução, consistência, fluidez, memória, repetição e notas.",
+    "Capoeira prepara o corpo e revisa base tecnica. O Steezy segue como missao principal do sabado.",
   workoutBlocks: [
+    block("danca-capoeira-aquecimento", "Aquecimento Corporal com Capoeira", "warmup", danceCapoeiraWarmup),
+    block(
+      "danca-posturas-isometricas",
+      "Base Corporal e Posturas Isometricas",
+      "base_body",
+      capoeiraBaseBody,
+      { required: false },
+    ),
+    block("danca-capoeira-revisao", "Revisao Tecnica de Capoeira", "review", danceCapoeiraReview),
     block("danca-steezy", "Steezy - Aula do Dia", "technical", [
       skill({
         id: "steezy-aula-do-dia",
@@ -1933,10 +1934,10 @@ const danca: Workout = {
         priority: "technical",
         durationSec: 1800,
         progressionModel: "external_course",
-        metricSchema: ["durationSec", "completed", "confidence1to5", "fluency1to5", "memory1to5"],
+        metricSchema: ["durationSec", "completed", "fluency1to5"],
         referenceSearchQuery: "SteezyStudio",
         note:
-          "Registrar programa/curso, aula/episódio, estilo, duração feita, se concluiu, trecho difícil, confiança, fluidez, memória e notas.",
+          "Abrir o Steezy, seguir a aula do dia e registrar duração, fluidez 1-5 e notas rápidas.",
       }),
     ], { required: true }),
     block("danca-flow", "Repetição Final / Flow", "technical", [
@@ -1948,9 +1949,9 @@ const danca: Workout = {
         priority: "technical",
         durationSec: 600,
         progressionModel: "quality_progression",
-        metricSchema: ["durationSec", "fluency1to5", "memory1to5", "completed"],
+        metricSchema: ["durationSec", "fluency1to5", "completed"],
         referenceSearchQuery: "dance flow practice beginner",
-        note: "Repetir trecho difícil ou coreografia final com foco em fluidez e memória.",
+        note: "Repetir trecho ou coreografia com foco em continuidade. Registrar duração, fluidez 1-5 e notas rápidas.",
       }),
     ]),
     block("danca-alongamento", "Alongamento Final da Semana", "cooldown", commonCooldown),
@@ -2034,5 +2035,5 @@ export const INITIAL_TRAINING_PLAN: TrainingPlan = {
   id: MASTER_TRAINING_PLAN_ID,
   version: MASTER_TRAINING_PLAN_VERSION,
   updatedAt: "2026-05-28",
-  workouts: [domingo, treinoA, boxe, treinoB, basquete, treinoC, capoeira, danca],
+  workouts: [domingo, treinoA, boxe, treinoB, basquete, treinoC, danca],
 };

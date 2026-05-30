@@ -161,7 +161,6 @@ function isStructuredMasterPlan(plan: TrainingPlan): boolean {
     "treino-b",
     "basquete-handles",
     "treino-c",
-    "capoeira",
     "danca",
   ];
 

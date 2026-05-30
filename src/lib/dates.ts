@@ -32,16 +32,19 @@ export function formatDayName(dayOfWeek: number): string {
 }
 
 export function getWorkoutForDate(plan: TrainingPlan, date = new Date()): Workout {
+  const activeWorkouts = plan.workouts.filter((workout) => workout.active !== false);
   return (
-    plan.workouts.find((workout) => workout.dayOfWeek === date.getDay()) ??
+    activeWorkouts.find((workout) => workout.dayOfWeek === date.getDay()) ??
+    activeWorkouts[0] ??
     plan.workouts[0]
   );
 }
 
 export function getNextWorkout(plan: TrainingPlan, date = new Date()): Workout {
+  const activeWorkouts = plan.workouts.filter((workout) => workout.active !== false);
   for (let offset = 1; offset <= 7; offset += 1) {
     const next = addDays(date, offset);
-    const workout = plan.workouts.find(
+    const workout = activeWorkouts.find(
       (candidate) => candidate.dayOfWeek === next.getDay() && candidate.type !== "rest",
     );
     if (workout) {
@@ -49,7 +52,7 @@ export function getNextWorkout(plan: TrainingPlan, date = new Date()): Workout {
     }
   }
 
-  return plan.workouts[0];
+  return activeWorkouts[0] ?? plan.workouts[0];
 }
 
 export function daysUntilNextCheckin(

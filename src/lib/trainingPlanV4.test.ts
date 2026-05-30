@@ -4,13 +4,13 @@ import { MASTER_TRAINING_PLAN_VERSION } from "../data/initialTrainingPlan";
 import type { AppData } from "../types/appData";
 import { normalizeAppDataForWave } from "./trainingPlan";
 
-describe("training plan v5", () => {
+describe("training plan v7", () => {
   it("remove aquecimento especifico separado dos treinos A/B/C", () => {
     const data = createInitialAppData(new Date("2026-05-25T10:00:00.000Z"));
     const serialized = JSON.stringify(data.trainingPlan);
 
     expect(data.trainingPlan.version).toBe(MASTER_TRAINING_PLAN_VERSION);
-    expect(MASTER_TRAINING_PLAN_VERSION).toBe(6);
+    expect(MASTER_TRAINING_PLAN_VERSION).toBe(7);
     expect(serialized).not.toContain("a-aquecimento-especifico");
     expect(serialized).not.toContain("b-aquecimento-especifico");
     expect(serialized).not.toContain("c-aquecimento-especifico");
@@ -48,7 +48,7 @@ describe("training plan v5", () => {
     const normalized = normalizeAppDataForWave(data);
 
     expect(normalized.changed).toBe(true);
-    expect(normalized.data.trainingPlan.version).toBe(6);
+    expect(normalized.data.trainingPlan.version).toBe(7);
     expect(JSON.stringify(normalized.data.trainingPlan)).not.toContain("Leg Press leve");
   });
 
@@ -57,7 +57,7 @@ describe("training plan v5", () => {
     const normalized = normalizeAppDataForWave(data);
 
     expect(normalized.changed).toBe(true);
-    expect(normalized.data.trainingPlan.version).toBe(6);
+    expect(normalized.data.trainingPlan.version).toBe(7);
     expect(JSON.stringify(normalized.data.trainingPlan)).not.toContain("a-aquecimento-especifico");
   });
 });

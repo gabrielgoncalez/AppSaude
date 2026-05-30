@@ -33,6 +33,7 @@ import type {
   TrainingSession,
   Workout,
 } from "../../types/training";
+import { shouldShowItemMetrics } from "./itemMetricVisibility";
 import { ExerciseCard } from "./ExerciseCard";
 
 type DailyWorkoutRunnerProps = {
@@ -66,12 +67,21 @@ type MetricKey =
 
 type MetricFieldConfig = {
   number: Array<{ key: MetricKey; label: string; suffix: string }>;
+  technicalNumber: Array<{
+    key: string;
+    label: string;
+    suffix: string;
+    min?: number;
+    max?: number;
+  }>;
   rating: Array<{ key: string; label: string }>;
   boolean: Array<{ key: string; label: string }>;
   select: Array<{ key: string; label: string; options: string[] }>;
   text: Array<{ key: string; label: string }>;
   notes: boolean;
 };
+
+type MetricsByItem = Record<string, SkillWorkoutMetrics>;
 
 type ExecutionPanelProps = {
   completed: boolean;
@@ -95,9 +105,7 @@ export function DailyWorkoutRunner({
 }: DailyWorkoutRunnerProps) {
   const [sequenceOpen, setSequenceOpen] = useState(false);
   const [completedOpen, setCompletedOpen] = useState(false);
-  const [metrics, setMetrics] = useState<SkillWorkoutMetrics>(() =>
-    getInitialMetrics(workout.id),
-  );
+  const [metricsByItem, setMetricsByItem] = useState<MetricsByItem>({});
   const blocks = useMemo(
     () => prescription?.prescribedBlocks ?? [],
     [prescription?.prescribedBlocks],
@@ -115,6 +123,10 @@ export function DailyWorkoutRunner({
   const incompleteQueue = queue.filter((entry) => !isEntryCompleted(entry, session));
   const current = incompleteQueue[0];
   const next = incompleteQueue[1];
+  const currentMetricsKey = current ? getEntryKey(current) : undefined;
+  const currentMetrics = currentMetricsKey
+    ? (metricsByItem[currentMetricsKey] ?? getInitialMetrics(workout.id))
+    : getInitialMetrics(workout.id);
   const requiredEntries = queue.filter((entry) =>
     isRequiredItem(entry.block, entry.exercise, requiredContext),
   );
@@ -133,31 +145,45 @@ export function DailyWorkoutRunner({
     currentIsLastRequired || (!requiredEntries.length && currentIsLastActive);
 
   function setNumber(key: MetricKey, value: number | undefined) {
-    setMetrics((currentMetrics) => ({ ...currentMetrics, [key]: value }));
+    setCurrentMetrics((itemMetrics) => ({ ...itemMetrics, [key]: value }));
   }
 
   function setRating(key: string, value: 1 | 2 | 3 | 4 | 5) {
-    setMetrics((currentMetrics) => ({
-      ...currentMetrics,
+    setCurrentMetrics((itemMetrics) => ({
+      ...itemMetrics,
       technicalRatings: {
-        ...(currentMetrics.technicalRatings ?? {}),
+        ...(itemMetrics.technicalRatings ?? {}),
         [key]: value,
       },
     }));
   }
 
   function setTechnicalValue(key: string, value: TechnicalMetricValue) {
-    setMetrics((currentMetrics) => ({
-      ...currentMetrics,
+    setCurrentMetrics((itemMetrics) => ({
+      ...itemMetrics,
       technicalValues: {
-        ...(currentMetrics.technicalValues ?? {}),
+        ...(itemMetrics.technicalValues ?? {}),
         [key]: value,
       },
     }));
   }
 
   function setNotes(notes: string) {
-    setMetrics((currentMetrics) => ({ ...currentMetrics, notes }));
+    setCurrentMetrics((itemMetrics) => ({ ...itemMetrics, notes }));
+  }
+
+  function setCurrentMetrics(
+    updater: (itemMetrics: SkillWorkoutMetrics) => SkillWorkoutMetrics,
+  ) {
+    if (!currentMetricsKey) {
+      return;
+    }
+    setMetricsByItem((currentByItem) => ({
+      ...currentByItem,
+      [currentMetricsKey]: updater(
+        currentByItem[currentMetricsKey] ?? getInitialMetrics(workout.id),
+      ),
+    }));
   }
 
   function getCompletedStateWith(entry?: DailyQueueItem) {
@@ -175,12 +201,13 @@ export function DailyWorkoutRunner({
 
   function finishTechnicalWith(entry: DailyQueueItem) {
     const { completedBlocks, completedItems } = getCompletedStateWith(entry);
+    const scopedMetrics = withEntryMetrics(metricsByItem, entry, currentMetrics, workout.id);
     onCompleteSkillWorkout({
-      ...metrics,
+      ...currentMetrics,
       status: "completed",
       completedBlocks,
       completedItems,
-      technicalBlocks: buildTechnicalBlocks(workout, blocks, metrics, {
+      technicalBlocks: buildTechnicalBlocks(workout, blocks, scopedMetrics, {
         completedItems,
         completedBlocks,
       }),
@@ -189,12 +216,15 @@ export function DailyWorkoutRunner({
 
   function savePartial(entry?: DailyQueueItem) {
     const { completedBlocks, completedItems } = getCompletedStateWith(entry);
+    const scopedMetrics = entry
+      ? withEntryMetrics(metricsByItem, entry, currentMetrics, workout.id)
+      : metricsByItem;
     onCompleteSkillWorkout({
-      ...metrics,
+      ...currentMetrics,
       status: "partial",
       completedBlocks,
       completedItems,
-      technicalBlocks: buildTechnicalBlocks(workout, blocks, metrics, {
+      technicalBlocks: buildTechnicalBlocks(workout, blocks, scopedMetrics, {
         completedItems,
         completedBlocks,
       }),
@@ -251,7 +281,7 @@ export function DailyWorkoutRunner({
             block={current.block}
             completed={isEntryCompleted(current, session)}
             exercise={current.exercise}
-            metrics={metrics}
+            metrics={currentMetrics}
             onComplete={() => completeCurrentItem(current)}
             onSetNumber={setNumber}
             onSetRating={setRating}
@@ -359,7 +389,7 @@ function TrainingItemCard({
   onSetTechnicalValue: (key: string, value: TechnicalMetricValue) => void;
   onSetNotes: (notes: string) => void;
 }) {
-  const showMetrics = shouldShowMetrics(block, exercise, workout);
+  const showMetrics = shouldShowItemMetrics(block, exercise);
   const showTimer = shouldShowTimer(block, exercise, workout);
   return (
     <ExecutionCardShell
@@ -593,6 +623,7 @@ function MetricRenderer({
   const fields = getMetricFields(workout, exercise);
   if (
     !fields.number.length &&
+    !fields.technicalNumber.length &&
     !fields.rating.length &&
     !fields.boolean.length &&
     !fields.select.length &&
@@ -618,6 +649,24 @@ function MetricRenderer({
               value={metrics[field.key]}
             />
           ))}
+        </div>
+      ) : null}
+      {fields.technicalNumber.length ? (
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          {fields.technicalNumber.map((field) => {
+            const value = metrics.technicalValues?.[field.key];
+            return (
+              <NumberField
+                key={field.key}
+                label={field.label}
+                max={field.max}
+                min={field.min}
+                onChange={(nextValue) => onSetTechnicalValue(field.key, nextValue)}
+                suffix={field.suffix}
+                value={typeof value === "number" ? value : undefined}
+              />
+            );
+          })}
         </div>
       ) : null}
       {fields.rating.length ? (
@@ -867,6 +916,25 @@ function isSameEntry(left: DailyQueueItem | undefined, right: DailyQueueItem | u
   );
 }
 
+function getEntryKey(entry: DailyQueueItem): string {
+  return getCompletionKey(entry.block.id, entry.exercise.id);
+}
+
+function withEntryMetrics(
+  metricsByItem: MetricsByItem,
+  entry: DailyQueueItem,
+  metrics: SkillWorkoutMetrics,
+  workoutId: string,
+): MetricsByItem {
+  return {
+    ...metricsByItem,
+    [getEntryKey(entry)]: {
+      ...getInitialMetrics(workoutId),
+      ...metrics,
+    },
+  };
+}
+
 function isSetEntry(entry: DailyQueueItem): boolean {
   return entry.block.blockMode === "sets" && isStrengthExercise(entry.exercise);
 }
@@ -906,7 +974,7 @@ function getCompletedBlockIds(
 function buildTechnicalBlocks(
   workout: Workout,
   blocks: PrescribedBlock[],
-  metrics: SkillWorkoutMetrics,
+  metricsByItem: MetricsByItem,
   state: {
     completedBlocks: string[];
     completedItems: string[];
@@ -922,27 +990,29 @@ function buildTechnicalBlocks(
         const itemCompleted = state.completedItems.some((key) =>
           [getCompletionKey(block.id, item.id), item.id].includes(key),
         );
-        const hasMetrics = shouldShowMetrics(block, item, workout);
+        const hasMetrics = shouldShowItemMetrics(block, item);
+        const itemMetrics =
+          metricsByItem[getCompletionKey(block.id, item.id)] ?? getInitialMetrics(workout.id);
         return {
           itemId: item.id,
           itemName: getItemName(item),
           completed: itemCompleted,
           completedAt: itemCompleted ? completedAt : undefined,
-          metricValues: hasMetrics
+          metricValues: hasMetrics && itemCompleted
             ? {
-                durationMin: metrics.durationMin,
-                rounds: metrics.rounds,
-                errors: metrics.errors,
-                hits: metrics.hits,
-                attempts: metrics.attempts,
-                cleanStreakSec: metrics.cleanStreakSec,
-                quality1to5: metrics.quality1to5,
-                ...(metrics.technicalValues ?? {}),
+                durationMin: itemMetrics.durationMin,
+                rounds: itemMetrics.rounds,
+                errors: itemMetrics.errors,
+                hits: itemMetrics.hits,
+                attempts: itemMetrics.attempts,
+                cleanStreakSec: itemMetrics.cleanStreakSec,
+                quality1to5: itemMetrics.quality1to5,
+                ...(itemMetrics.technicalValues ?? {}),
                 workoutId: workout.id,
               }
             : undefined,
-          technicalRatings: hasMetrics ? metrics.technicalRatings : undefined,
-          notes: hasMetrics ? metrics.notes : undefined,
+          technicalRatings: hasMetrics && itemCompleted ? itemMetrics.technicalRatings : undefined,
+          notes: hasMetrics && itemCompleted ? itemMetrics.notes : undefined,
         };
       });
 
@@ -956,40 +1026,12 @@ function buildTechnicalBlocks(
   });
 }
 
-function shouldShowBlockMetrics(block: PrescribedBlock): boolean {
-  return block.blockMode === "test" || block.type === "test";
-}
-
-function shouldShowMetrics(
-  block: PrescribedBlock,
-  exercise: Exercise,
-  workout: Workout,
-): boolean {
-  if (shouldShowBlockMetrics(block) || exercise.kind === "test" || exercise.type === "test") {
-    return true;
-  }
-
-  if (exercise.kind === "dance_external" || workout.modality === "dance") {
-    return true;
-  }
-
-  if (exercise.kind === "capoeira_movement" || exercise.type === "capoeira_movement") {
-    return (
-      block.id === "capoeira-movimento-novo" ||
-      exercise.id === "capoeira-movimento-novo-curso" ||
-      exercise.priority === "technical"
-    );
-  }
-
-  return false;
-}
-
 function shouldShowTimer(
   block: PrescribedBlock,
   exercise: Exercise,
   workout: Workout,
 ): boolean {
-  if (!exercise.durationSec || shouldShowMetrics(block, exercise, workout)) {
+  if (!exercise.durationSec || shouldShowItemMetrics(block, exercise)) {
     return false;
   }
 
@@ -1013,6 +1055,10 @@ function shouldShowTimer(
     return true;
   }
 
+  if (exercise.kind === "capoeira_movement") {
+    return true;
+  }
+
   if (workout.modality === "boxing" && block.id === "boxe-sombra") {
     return true;
   }
@@ -1021,27 +1067,23 @@ function shouldShowTimer(
 }
 
 function getMetricFields(workout: Workout, exercise: Exercise): MetricFieldConfig {
-  if (exercise.kind === "dance_external" || workout.modality === "dance") {
+  if (exercise.kind === "dance_external" || exercise.type === "dance_external") {
     return {
       number: [{ key: "durationMin" as const, label: "Duracao feita", suffix: "min" }],
-      rating: [
-        { key: "dance_confidence", label: "Confianca" },
-        { key: "dance_fluency", label: "Fluidez" },
-        { key: "dance_memory", label: "Memoria" },
+      technicalNumber: [
+        { key: "dance_note_tag", label: "Nota #", suffix: "", min: 1, max: 999 },
       ],
+      rating: [{ key: "dance_fluency", label: "Fluidez" }],
       boolean: [],
       select: [],
-      text: [
-        { key: "dance_program", label: "Programa/curso" },
-        { key: "dance_lesson", label: "Aula/EP" },
-        { key: "dance_style", label: "Estilo" },
-      ],
+      text: [],
       notes: true,
     };
   }
   if (exercise.kind === "capoeira_movement" || workout.modality === "capoeira") {
     return {
       number: [{ key: "durationMin" as const, label: "Duracao", suffix: "min" }],
+      technicalNumber: [],
       rating: [
         { key: "capoeira_quality", label: "Qualidade" },
         { key: "capoeira_fluency", label: "Fluidez" },
@@ -1067,6 +1109,7 @@ function getMetricFields(workout: Workout, exercise: Exercise): MetricFieldConfi
         { key: "errors" as const, label: "Perdas", suffix: "" },
         { key: "cleanStreakSec" as const, label: "Sequencia limpa", suffix: "s" },
       ],
+      technicalNumber: [],
       rating: [
         { key: "basketball_eyes_up", label: "Olhos para cima" },
         { key: "basketball_weak_hand", label: "Mao fraca" },
@@ -1084,6 +1127,7 @@ function getMetricFields(workout: Workout, exercise: Exercise): MetricFieldConfi
         { key: "hits" as const, label: "Acertos", suffix: "" },
         { key: "attempts" as const, label: "Tentativas", suffix: "" },
       ],
+      technicalNumber: [],
       rating: [
         { key: "boxing_guard", label: "Guarda" },
         { key: "boxing_base", label: "Base" },
@@ -1095,7 +1139,15 @@ function getMetricFields(workout: Workout, exercise: Exercise): MetricFieldConfi
       notes: false,
     };
   }
-  return { number: [], rating: [], boolean: [], select: [], text: [], notes: false };
+  return {
+    number: [],
+    technicalNumber: [],
+    rating: [],
+    boolean: [],
+    select: [],
+    text: [],
+    notes: false,
+  };
 }
 
 function getInitialMetrics(workoutId: string): SkillWorkoutMetrics {
@@ -1122,7 +1174,7 @@ function getInitialMetrics(workoutId: string): SkillWorkoutMetrics {
   if (workoutId === "danca") {
     return {
       durationMin: 30,
-      technicalRatings: { dance_confidence: 3, dance_fluency: 3, dance_memory: 3 },
+      technicalRatings: { dance_fluency: 3 },
     };
   }
   if (workoutId === "capoeira") {
@@ -1231,10 +1283,12 @@ type NumberFieldProps = {
   label: string;
   value?: number;
   suffix: string;
+  min?: number;
+  max?: number;
   onChange: (value: number | undefined) => void;
 };
 
-function NumberField({ label, value, suffix, onChange }: NumberFieldProps) {
+function NumberField({ label, value, suffix, min, max, onChange }: NumberFieldProps) {
   return (
     <label className="text-xs font-bold uppercase tracking-wide text-slate-400">
       {label}
@@ -1242,9 +1296,18 @@ function NumberField({ label, value, suffix, onChange }: NumberFieldProps) {
         <input
           className="w-full bg-transparent px-3 py-3 text-lg font-black text-white"
           inputMode="decimal"
-          onChange={(event) =>
-            onChange(event.target.value === "" ? undefined : Number(event.target.value))
-          }
+          max={max}
+          min={min}
+          onChange={(event) => {
+            if (event.target.value === "") {
+              onChange(undefined);
+              return;
+            }
+            const parsed = Number(event.target.value);
+            const clampedMin = min === undefined ? parsed : Math.max(min, parsed);
+            const clamped = max === undefined ? clampedMin : Math.min(max, clampedMin);
+            onChange(clamped);
+          }}
           type="number"
           value={value ?? ""}
         />

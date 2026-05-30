@@ -14,7 +14,7 @@ const RESOLVED_STATUSES = new Set<DayEvent["status"]>([
 export function getCycleWorkouts(plan: TrainingPlan): Workout[] {
   const seenGroups = new Set<string>();
   return [...plan.workouts]
-    .filter((workout) => workout.type !== "rest")
+    .filter((workout) => workout.active !== false && workout.type !== "rest")
     .sort((a, b) => (a.cycleOrder ?? a.dayOfWeek) - (b.cycleOrder ?? b.dayOfWeek))
     .filter((workout) => {
       if (!workout.sameDayGroupId) {
@@ -103,13 +103,15 @@ export function getTodayWorkout(
       ? safeData.schedule.todayWorkoutId
       : safeData.schedule.activeWorkoutId;
   const scheduledWorkout = safeData.trainingPlan.workouts.find(
-    (workout) => workout.id === currentScheduleWorkoutId,
+    (workout) => workout.active !== false && workout.id === currentScheduleWorkoutId,
   );
   const historicalEvent = key === safeData.schedule.todayDate
     ? undefined
     : getStoredDayEvent(safeData, key);
   const eventWorkout = historicalEvent
-    ? safeData.trainingPlan.workouts.find((workout) => workout.id === historicalEvent.workoutId)
+    ? safeData.trainingPlan.workouts.find(
+        (workout) => workout.active !== false && workout.id === historicalEvent.workoutId,
+      )
     : undefined;
   const fixedWorkout = getWorkoutForDate(safeData.trainingPlan, toDate(date));
 
@@ -670,38 +672,49 @@ function normalizeScheduleState(
 ): ScheduleState {
   const key = dayKey(date);
   const cycleOrder = reconcileCycleOrder(plan, schedule);
+  const activeWorkouts = plan.workouts.filter((workout) => workout.active !== false);
+  const fixedWorkout = getWorkoutForDate(plan, date);
+  const scheduleWorkoutIsValid = activeWorkouts.some(
+    (workout) => workout.id === schedule.activeWorkoutId,
+  );
+  const todayWorkoutIsValid = activeWorkouts.some(
+    (workout) => workout.id === schedule.todayWorkoutId,
+  );
   const fallbackWorkoutId =
-    schedule.activeWorkoutId ??
+    (scheduleWorkoutIsValid ? schedule.activeWorkoutId : undefined) ??
+    (fixedWorkout.type !== "rest" ? fixedWorkout.id : undefined) ??
     cycleOrder[0] ??
-    plan.workouts.find((workout) => workout.type !== "rest")?.id ??
+    activeWorkouts.find((workout) => workout.type !== "rest")?.id ??
     plan.workouts[0]?.id ??
     "";
   const isSameToday = schedule.todayDate === key;
   const missingCurrentFields =
     !schedule.todayWorkoutId || !schedule.todayStatus || !schedule.todayDate;
+  const hasInvalidTodayWorkout = Boolean(schedule.todayWorkoutId) && !todayWorkoutIsValid;
   const shouldResetToday = !isSameToday || missingCurrentFields;
+  const shouldReplaceTodayWorkout = shouldResetToday || hasInvalidTodayWorkout;
   const nextRevision =
-    schedule.revision === undefined || shouldResetToday
+    schedule.revision === undefined || shouldReplaceTodayWorkout
       ? (schedule.revision ?? 0) + 1
       : schedule.revision;
   const updatedAt =
-    shouldResetToday || !arraysEqual(schedule.cycleOrder, cycleOrder)
+    shouldReplaceTodayWorkout || !arraysEqual(schedule.cycleOrder, cycleOrder)
       ? date.toISOString()
       : schedule.updatedAt;
 
   return {
     ...schedule,
     activeWorkoutId: fallbackWorkoutId,
-    activeDate: shouldResetToday ? key : (schedule.activeDate ?? key),
+    activeDate: shouldReplaceTodayWorkout ? key : (schedule.activeDate ?? key),
     lastResolvedDate: schedule.lastResolvedDate ?? dayKey(subDays(date, 1)),
     cycleOrder,
     hasDebtAlert: schedule.hasDebtAlert ?? false,
     updatedAt,
-    todayWorkoutId: shouldResetToday
+    todayWorkoutId: shouldReplaceTodayWorkout
       ? fallbackWorkoutId
       : (schedule.todayWorkoutId ?? fallbackWorkoutId),
-    todayStatus: shouldResetToday ? "selected" : (schedule.todayStatus ?? "selected"),
-    todayDate: shouldResetToday ? key : (schedule.todayDate ?? key),
+    todayStatus: shouldReplaceTodayWorkout ? "selected" : (schedule.todayStatus ?? "selected"),
+    todayDate: shouldReplaceTodayWorkout ? key : (schedule.todayDate ?? key),
     revision: nextRevision,
   };
 }
@@ -716,7 +729,7 @@ function reconcileCycleOrder(plan: TrainingPlan, schedule: ScheduleState): strin
 function getOrderedCycleWorkouts(plan: TrainingPlan, schedule: ScheduleState): Workout[] {
   const fallback = getCycleWorkouts(plan);
   const ordered = schedule.cycleOrder
-    .map((id) => plan.workouts.find((workout) => workout.id === id))
+    .map((id) => plan.workouts.find((workout) => workout.id === id && workout.active !== false))
     .filter((workout): workout is Workout => Boolean(workout));
 
   return ordered.length ? ordered : fallback;
@@ -728,7 +741,10 @@ export function getWorkoutGroup(plan: TrainingPlan, workout: Workout): Workout[]
   }
 
   return plan.workouts
-    .filter((candidate) => candidate.sameDayGroupId === workout.sameDayGroupId)
+    .filter(
+      (candidate) =>
+        candidate.active !== false && candidate.sameDayGroupId === workout.sameDayGroupId,
+    )
     .sort((a, b) => (a.groupOrder ?? 0) - (b.groupOrder ?? 0));
 }
 

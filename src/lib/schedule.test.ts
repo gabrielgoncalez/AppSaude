@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createInitialAppData } from "../data/createInitialAppData";
 import {
   completeWorkoutDay,
+  getCycleWorkouts,
   getDayEvent,
   getNextCycleWorkoutAfter,
   getTodayWorkout,
@@ -163,24 +164,42 @@ describe("schedule", () => {
     });
   });
 
-  it("sabado composto permite parcial e so avanca depois de capoeira e danca", () => {
+  it("sabado usa uma missao unica de danca com capoeira corporal", () => {
     const data = createInitialAppData(new Date("2026-05-30T10:00:00"));
-    const capoeira = data.trainingPlan.workouts.find((item) => item.id === "capoeira")!;
     const danca = data.trainingPlan.workouts.find((item) => item.id === "danca")!;
 
-    const partial = completeWorkoutDay(data, capoeira, new Date("2026-05-30T10:00:00"));
-    expect(partial.schedule.activeWorkoutId).toBe("danca");
-    expect(partial.schedule.todayStatus).toBe("partial");
-    expect(getDayEvent(partial, new Date("2026-05-30T10:00:00"))?.groupParts).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ workoutId: "capoeira", status: "completed" }),
-        expect.objectContaining({ workoutId: "danca", status: "selected" }),
-      ]),
-    );
-    expect(getTodayWorkout(partial, new Date("2026-05-30T10:00:00")).id).toBe("danca");
+    expect(data.trainingPlan.workouts.find((item) => item.id === "capoeira")).toBeUndefined();
+    expect(getCycleWorkouts(data.trainingPlan).map((item) => item.id)).toEqual([
+      "treino-a",
+      "boxe",
+      "treino-b",
+      "basquete-handles",
+      "treino-c",
+      "danca",
+    ]);
+    expect(getTodayWorkout(data, new Date("2026-05-30T10:00:00")).id).toBe("danca");
+    expect(getDayEvent(data, new Date("2026-05-30T10:00:00"))?.groupParts).toBeUndefined();
 
-    const completed = completeWorkoutDay(partial, danca, new Date("2026-05-30T11:00:00"));
+    const completed = completeWorkoutDay(data, danca, new Date("2026-05-30T11:00:00"));
     expect(completed.schedule.todayStatus).toBe("completed");
     expect(completed.schedule.activeWorkoutId).toBe("treino-a");
+  });
+
+  it("migra agenda antiga que apontava para capoeira no sabado", () => {
+    const data = createInitialAppData(new Date("2026-05-30T10:00:00"));
+    const stale = {
+      ...data,
+      schedule: {
+        ...data.schedule,
+        activeWorkoutId: "capoeira",
+        todayWorkoutId: "capoeira",
+      },
+    };
+
+    expect(getTodayWorkout(stale, new Date("2026-05-30T10:00:00")).id).toBe("danca");
+    expect(getDayEvent(stale, new Date("2026-05-30T10:00:00"))).toMatchObject({
+      workoutId: "danca",
+      status: "selected",
+    });
   });
 });
