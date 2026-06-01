@@ -9,6 +9,7 @@ import {
 } from "../../lib/progression";
 import { openReferenceVideoSearch } from "../../lib/referenceSearch";
 import { isWorkSet } from "../../lib/sets";
+import type { PrescribedVariantOption } from "../../lib/prescriptionEngine";
 import type { WavePrescription } from "../../lib/waveEngine";
 import {
   getEffectiveWarmupSets,
@@ -28,7 +29,11 @@ type ExerciseCardProps = {
   sessions: TrainingSession[];
   currentSessionId?: string;
   prescription?: WavePrescription;
+  prescribedExerciseId?: string;
+  variantOptions?: PrescribedVariantOption[];
+  variantLocked?: boolean;
   workout?: Workout;
+  onSelectVariant?: (exerciseId: string) => void;
   onAddSet: (exercise: Exercise, set: SetLog) => void;
   onFinishExerciseSet: (exercise: Exercise, set: SetLog) => void;
 };
@@ -40,7 +45,11 @@ export function ExerciseCard({
   sessions,
   currentSessionId,
   prescription,
+  prescribedExerciseId,
+  variantOptions,
+  variantLocked,
   workout,
+  onSelectVariant,
   onAddSet,
   onFinishExerciseSet,
 }: ExerciseCardProps) {
@@ -62,6 +71,8 @@ export function ExerciseCard({
       : getWaveRepRangeLabel(exercise);
   const restSec = prescription?.restSec ?? exercise.restSec;
   const displayName = exercise.displayName ?? exercise.name;
+  const hasVariantOptions = Boolean(variantOptions && variantOptions.length > 1);
+  const prescribedId = prescribedExerciseId ?? exercise.id;
   const usesDurationMetric =
     Boolean(exercise.durationSec) && exercise.repMin === undefined && exercise.repMax === undefined;
   const weightLabel =
@@ -122,6 +133,45 @@ export function ExerciseCard({
         </div>
         <Timer className="text-orange-300" size={22} />
       </div>
+
+      {hasVariantOptions ? (
+        <div className="mt-3 rounded-lg border border-slate-800 bg-slate-950 p-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+            <label className="flex-1">
+              <span className="text-xs font-bold uppercase tracking-wide text-slate-400">
+                Variação
+              </span>
+              <select
+                className="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-bold text-white"
+                disabled={variantLocked}
+                onChange={(event) => onSelectVariant?.(event.target.value)}
+                value={exercise.id}
+              >
+                {variantOptions?.map((option) => (
+                  <option key={option.exercise.id} value={option.exercise.id}>
+                    {option.exercise.displayName ?? option.exercise.name}
+                    {option.isPrescribed ? " (indicada)" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {exercise.id !== prescribedId && !variantLocked ? (
+              <button
+                className="rounded-md border border-slate-700 px-3 py-2 text-sm font-bold text-slate-200 transition hover:border-teal-300 hover:text-teal-200"
+                onClick={() => onSelectVariant?.(prescribedId)}
+                type="button"
+              >
+                Voltar para indicada
+              </button>
+            ) : null}
+          </div>
+          <p className="mt-2 text-xs text-slate-400">
+            {variantLocked
+              ? "Variação travada porque já existe série registrada neste card."
+              : "Use quando a estação indicada estiver ocupada. O histórico fica separado por variação."}
+          </p>
+        </div>
+      ) : null}
 
       <div
         className={`mt-3 rounded-lg border p-3 text-sm ${

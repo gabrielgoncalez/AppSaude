@@ -17,9 +17,14 @@ export type PrescribedExercise = {
   prescription: WavePrescription;
 };
 
+export type PrescribedVariantOption = PrescribedExercise & {
+  isPrescribed: boolean;
+};
+
 export type PrescribedItem = PrescribedExercise & {
   blockId: string;
   blockName: string;
+  variantOptions?: PrescribedVariantOption[];
 };
 
 export type PrescribedBlock = Omit<WorkoutBlock, "items"> & {
@@ -107,20 +112,59 @@ export function getPrescribedBlocks(
 
   return workout.workoutBlocks
     .map((block) => {
-      const blockWorkout = { ...workout, workoutBlocks: undefined, exercises: block.items };
-      const selectedItems = getExercisesForWave(blockWorkout, wave)
+      const activeBlockItems = block.items
         .filter((exercise) => exercise.active !== false)
         .filter((exercise) => exercise.phaseAvailability !== "future")
-        .filter((exercise) => !isLegacyStrengthWarmupItem(workout, block, exercise))
+        .filter((exercise) => !isLegacyStrengthWarmupItem(workout, block, exercise));
+      const blockWorkout = { ...workout, workoutBlocks: undefined, exercises: activeBlockItems };
+      const selectedItems = getExercisesForWave(blockWorkout, wave)
         .map((exercise) => ({
           ...prescribeExercise(exercise, wave, data, date),
           blockId: block.id,
           blockName: block.name,
+          variantOptions: getVariantOptions(exercise, activeBlockItems, wave, data, date),
         }));
 
       return { ...block, items: selectedItems };
     })
     .filter((block) => block.items.length > 0);
+}
+
+function getVariantOptions(
+  selected: Exercise,
+  activeBlockItems: Exercise[],
+  wave: WaveType,
+  data: AppData,
+  date: Date,
+): PrescribedVariantOption[] | undefined {
+  const candidates = activeBlockItems.filter((candidate) =>
+    areExerciseVariants(selected, candidate),
+  );
+
+  if (candidates.length < 2) {
+    return undefined;
+  }
+
+  return candidates.map((candidate) => ({
+    ...prescribeExercise(candidate, wave, data, date),
+    isPrescribed: candidate.id === selected.id,
+  }));
+}
+
+function areExerciseVariants(left: Exercise, right: Exercise): boolean {
+  if (left.id === right.id) {
+    return true;
+  }
+
+  if (left.variationGroupId && right.variationGroupId) {
+    return left.variationGroupId === right.variationGroupId;
+  }
+
+  if (left.lineageId && right.lineageId) {
+    return left.lineageId === right.lineageId;
+  }
+
+  return false;
 }
 
 function isLegacyStrengthWarmupItem(

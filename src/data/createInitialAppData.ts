@@ -5,6 +5,7 @@ import { DEFAULT_ACHIEVEMENTS } from "./achievements";
 import { CAPOEIRA_MOVEMENTS } from "./capoeiraMovements";
 import { DEFAULT_REWARDS } from "./defaultRewards";
 import { INITIAL_TRAINING_PLAN } from "./initialTrainingPlan";
+import { ECONOMY_VERSION } from "../lib/gamification";
 
 export function createInitialAppData(now = new Date()): AppData {
   const iso = now.toISOString();
@@ -23,6 +24,7 @@ export function createInitialAppData(now = new Date()): AppData {
       onboardingDone: false,
       preferredWeightStepKg: 2.5,
       theme: "dark",
+      economyVersion: ECONOMY_VERSION,
     },
     trainingPlan,
     schedule: createInitialSchedule(trainingPlan, now),

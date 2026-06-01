@@ -123,7 +123,7 @@ describe("hybrid engines", () => {
     ];
 
     const summary = getMonthlyCommitmentSummary(data, new Date("2026-05-12T10:00:00.000Z"));
-    expect(summary.coinsPenalty).toBeGreaterThanOrEqual(100);
+    expect(summary.coinsPenalty).toBe(12);
     expect(summary.score).toBeLessThanOrEqual(80);
   });
 
@@ -188,7 +188,7 @@ describe("hybrid engines", () => {
     const previous = session("s1", "2026-05-01T10:00:00.000Z", 40);
     const current = session("s2", "2026-05-08T10:00:00.000Z", 45);
 
-    expect(getPrBonus(current, [previous])).toBe(20);
+    expect(getPrBonus(current, [previous])).toBe(8);
   });
   it("modo tecnico salva metricas sem inflar XP de serie/exercicio", () => {
     const technical: TrainingSession = {
@@ -220,8 +220,8 @@ describe("hybrid engines", () => {
       ],
     };
 
-    expect(calculateSessionXp(technical)).toBe(35);
-    expect(getPrBonus(technical, [])).toBe(20);
+    expect(calculateSessionXp(technical)).toBe(12);
+    expect(getPrBonus(technical, [])).toBe(8);
   });
   it("varia supino por linhagem mantendo historicos separados", () => {
     const data = createInitialAppData(new Date("2026-05-01T10:00:00.000Z"));
@@ -285,5 +285,21 @@ describe("hybrid engines", () => {
       expect(getTodayPrescription(data, workout!).prescribedBlocks.length).toBeGreaterThan(0);
     });
     expect(data.trainingPlan.workouts.find((item) => item.id === "capoeira")).toBeUndefined();
+  });
+
+  it("inclui alternativas de variacao no item prescrito", () => {
+    const data = createInitialAppData(new Date("2026-05-25T10:00:00.000Z"));
+    const workout = data.trainingPlan.workouts.find((item) => item.id === "treino-a")!;
+    const prescription = getTodayPrescription(data, workout);
+    const supino = prescription.prescribedBlocks
+      .find((block) => block.id === "a-musculacao")
+      ?.items.find((item) => item.exercise.id === "supino-reto-maquina");
+
+    expect(supino?.variantOptions?.map((option) => option.exercise.id)).toEqual(
+      expect.arrayContaining(["supino-reto-maquina", "supino-reto-halteres"]),
+    );
+    expect(supino?.variantOptions?.find((option) => option.isPrescribed)?.exercise.id).toBe(
+      "supino-reto-maquina",
+    );
   });
 });

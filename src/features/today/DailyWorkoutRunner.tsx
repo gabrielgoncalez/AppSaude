@@ -1,6 +1,8 @@
 import {
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ChevronUp,
   ListChecks,
   Search,
@@ -20,7 +22,12 @@ import {
   unique,
   type RequiredItemContext,
 } from "../../lib/dailyCompletion";
-import type { PrescribedBlock, PrescribedItem, TodayPrescription } from "../../lib/prescriptionEngine";
+import type {
+  PrescribedBlock,
+  PrescribedItem,
+  PrescribedVariantOption,
+  TodayPrescription,
+} from "../../lib/prescriptionEngine";
 import { openReferenceVideoSearch } from "../../lib/referenceSearch";
 import { isStrengthExercise } from "../../lib/workoutItems";
 import type {
@@ -33,8 +40,13 @@ import type {
   TrainingSession,
   Workout,
 } from "../../types/training";
-import { shouldShowItemMetrics } from "./itemMetricVisibility";
 import { ExerciseCard } from "./ExerciseCard";
+import {
+  clampQueueIndex,
+  findNextPendingIndex,
+  findPreviousPendingIndex,
+} from "./dailyQueueNavigation";
+import { shouldShowItemMetrics } from "./itemMetricVisibility";
 
 type DailyWorkoutRunnerProps = {
   workout: Workout;
@@ -55,6 +67,10 @@ type DailyQueueItem = {
   block: PrescribedBlock;
   item: PrescribedItem;
   exercise: Exercise;
+};
+
+type DisplayQueueItem = DailyQueueItem & {
+  variantLocked?: boolean;
 };
 
 type MetricKey =
@@ -106,6 +122,8 @@ export function DailyWorkoutRunner({
   const [sequenceOpen, setSequenceOpen] = useState(false);
   const [completedOpen, setCompletedOpen] = useState(false);
   const [metricsByItem, setMetricsByItem] = useState<MetricsByItem>({});
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>({});
   const blocks = useMemo(
     () => prescription?.prescribedBlocks ?? [],
     [prescription?.prescribedBlocks],
@@ -119,10 +137,28 @@ export function DailyWorkoutRunner({
     [capoeiraHasNewMovement, prescription?.wave],
   );
   const queue = useMemo(() => flattenBlocks(blocks), [blocks]);
-  const completedEntries = queue.filter((entry) => isEntryCompleted(entry, session));
-  const incompleteQueue = queue.filter((entry) => !isEntryCompleted(entry, session));
-  const current = incompleteQueue[0];
-  const next = incompleteQueue[1];
+  const isCompleted = (entry: DailyQueueItem) => isEntryCompleted(entry, session);
+  const completedEntries = queue.filter(isCompleted);
+  const incompleteQueue = queue.filter((entry) => !isCompleted(entry));
+  const safeActiveIndex = clampQueueIndex(queue.length, activeIndex);
+  const activeEntry = safeActiveIndex >= 0 ? queue[safeActiveIndex] : undefined;
+  const resolvedActiveIndex =
+    activeEntry && !isCompleted(activeEntry)
+      ? safeActiveIndex
+      : findNextPendingIndex(queue, Math.max(safeActiveIndex, 0), isCompleted);
+  const current = resolvedActiveIndex >= 0 ? queue[resolvedActiveIndex] : incompleteQueue[0];
+  const currentIndex = current ? queue.findIndex((entry) => isSameEntry(entry, current)) : -1;
+  const nextIndex = current
+    ? findNextPendingIndex(queue, currentIndex, isCompleted, false)
+    : -1;
+  const previousIndex = current
+    ? findPreviousPendingIndex(queue, currentIndex, isCompleted)
+    : -1;
+  const next = nextIndex >= 0 ? queue[nextIndex] : undefined;
+  const previous = previousIndex >= 0 ? queue[previousIndex] : undefined;
+  const displayedCurrent = current
+    ? applySelectedVariant(current, selectedVariants, session?.exercises ?? [])
+    : undefined;
   const currentMetricsKey = current ? getEntryKey(current) : undefined;
   const currentMetrics = currentMetricsKey
     ? (metricsByItem[currentMetricsKey] ?? getInitialMetrics(workout.id))
@@ -143,6 +179,19 @@ export function DailyWorkoutRunner({
     isSameEntry(incompleteQueue[0], current);
   const shouldFinishOnCurrent =
     currentIsLastRequired || (!requiredEntries.length && currentIsLastActive);
+
+  function goToQueueIndex(index: number) {
+    if (index >= 0) {
+      setActiveIndex(index);
+    }
+  }
+
+  function selectVariant(entry: DailyQueueItem, exerciseId: string) {
+    setSelectedVariants((currentVariants) => ({
+      ...currentVariants,
+      [getEntryKey(entry)]: exerciseId,
+    }));
+  }
 
   function setNumber(key: MetricKey, value: number | undefined) {
     setCurrentMetrics((itemMetrics) => ({ ...itemMetrics, [key]: value }));
@@ -262,18 +311,22 @@ export function DailyWorkoutRunner({
         <CompletedItemsDrawer entries={completedEntries} />
       ) : null}
 
-      {current ? (
-        isSetEntry(current) ? (
+      {current && displayedCurrent ? (
+        isSetEntry(displayedCurrent) ? (
           <ExerciseCard
             currentSessionId={session?.id}
-            exercise={current.exercise}
-            key={`${current.block.id}:${current.exercise.id}`}
-            log={findExerciseLog(session?.exercises ?? [], current.exercise)}
+            exercise={displayedCurrent.exercise}
+            key={`${current.block.id}:${current.exercise.id}:${displayedCurrent.exercise.id}`}
+            log={findExerciseLog(session?.exercises ?? [], displayedCurrent.exercise)}
             onAddSet={onAddSet}
             onFinishExerciseSet={onFinishExerciseSet}
-            prescription={current.item.prescription}
-            previousSet={previousSets.get(current.exercise.id)}
+            onSelectVariant={(exerciseId) => selectVariant(current, exerciseId)}
+            prescribedExerciseId={current.item.exercise.id}
+            prescription={displayedCurrent.item.prescription}
+            previousSet={previousSets.get(displayedCurrent.exercise.id)}
             sessions={sessions}
+            variantLocked={displayedCurrent.variantLocked}
+            variantOptions={current.item.variantOptions}
             workout={workout}
           />
         ) : (
@@ -322,6 +375,27 @@ export function DailyWorkoutRunner({
             {getItemCategory(next.exercise, next.block)}
           </p>
         </Card>
+      ) : null}
+
+      {current ? (
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            disabled={!previous}
+            icon={<ChevronLeft size={17} />}
+            onClick={() => goToQueueIndex(previousIndex)}
+            variant="ghost"
+          >
+            Anterior
+          </Button>
+          <Button
+            disabled={!next}
+            icon={<ChevronRight size={17} />}
+            onClick={() => goToQueueIndex(nextIndex)}
+            variant="ghost"
+          >
+            Proximo
+          </Button>
+        </div>
       ) : null}
 
       <div className="flex flex-wrap gap-2">
@@ -899,12 +973,23 @@ function flattenBlocks(blocks: PrescribedBlock[]): DailyQueueItem[] {
 }
 
 function isEntryCompleted(entry: DailyQueueItem, session?: TrainingSession): boolean {
-  return isDailyItemCompleted({
+  if (isDailyItemCompleted({
     blockId: entry.block.id,
     item: entry.exercise,
     completedItems: session?.completedItems ?? [],
     exerciseLogs: session?.exercises ?? [],
-  });
+  })) {
+    return true;
+  }
+
+  return getVariantExercises(entry).some((exercise) =>
+    isDailyItemCompleted({
+      blockId: entry.block.id,
+      item: exercise,
+      completedItems: session?.completedItems ?? [],
+      exerciseLogs: session?.exercises ?? [],
+    }),
+  );
 }
 
 function isSameEntry(left: DailyQueueItem | undefined, right: DailyQueueItem | undefined): boolean {
@@ -918,6 +1003,35 @@ function isSameEntry(left: DailyQueueItem | undefined, right: DailyQueueItem | u
 
 function getEntryKey(entry: DailyQueueItem): string {
   return getCompletionKey(entry.block.id, entry.exercise.id);
+}
+
+function applySelectedVariant(
+  entry: DailyQueueItem,
+  selectedVariants: Record<string, string>,
+  exerciseLogs: ExerciseLog[],
+): DisplayQueueItem {
+  const variantOptions = entry.item.variantOptions;
+  if (!variantOptions?.length) {
+    return entry;
+  }
+
+  const lockedOption = getLoggedVariantOption(variantOptions, exerciseLogs);
+  const selectedId = lockedOption?.exercise.id ?? selectedVariants[getEntryKey(entry)];
+  const selectedOption =
+    variantOptions.find((option) => option.exercise.id === selectedId) ??
+    variantOptions.find((option) => option.isPrescribed) ??
+    variantOptions[0];
+
+  return {
+    ...entry,
+    item: {
+      ...entry.item,
+      exercise: selectedOption.exercise,
+      prescription: selectedOption.prescription,
+    },
+    exercise: selectedOption.exercise,
+    variantLocked: Boolean(lockedOption),
+  };
 }
 
 function withEntryMetrics(
@@ -944,6 +1058,20 @@ function findExerciseLog(logs: ExerciseLog[], exercise: Exercise): ExerciseLog |
     (log) =>
       log.exerciseId === exercise.id || Boolean(exercise.legacyIds?.includes(log.exerciseId)),
   );
+}
+
+function getLoggedVariantOption(
+  variantOptions: PrescribedVariantOption[],
+  logs: ExerciseLog[],
+): PrescribedVariantOption | undefined {
+  return variantOptions.find((option) => {
+    const log = findExerciseLog(logs, option.exercise);
+    return Boolean(log?.sets.length);
+  });
+}
+
+function getVariantExercises(entry: DailyQueueItem): Exercise[] {
+  return entry.item.variantOptions?.map((option) => option.exercise) ?? [];
 }
 
 function addEntryCompletion(completedItems: string[], entry: DailyQueueItem): string[] {

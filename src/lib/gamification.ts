@@ -8,18 +8,31 @@ import { isWorkSet } from "./sets";
 import { isExerciseFinished } from "./safety";
 
 export const XP_RULES = {
-  setLogged: 3,
-  exerciseCompleted: 10,
-  strengthWorkoutCompleted: 25,
-  boxingCompleted: 20,
-  basketballCompleted: 15,
-  danceCompleted: 20,
-  capoeiraCompleted: 20,
-  weekWithThreeStrength: 50,
-  checkin: 30,
-  executionComplete: 15,
-  cleanWorkout: 15,
-  pr: 20,
+  setLogged: 1,
+  exerciseCompleted: 2,
+  strengthWorkoutCompleted: 6,
+  boxingCompleted: 8,
+  basketballCompleted: 8,
+  danceCompleted: 8,
+  capoeiraCompleted: 8,
+  weekWithThreeStrength: 30,
+  checkin: 10,
+  executionComplete: 4,
+  cleanWorkout: 4,
+  pr: 8,
+} as const;
+
+export const ECONOMY_VERSION = 2;
+
+export const COIN_RULES = {
+  strengthWorkoutCompleted: 4,
+  boxingCompleted: 3,
+  basketballCompleted: 3,
+  danceCompleted: 3,
+  capoeiraCompleted: 3,
+  weekWithThreeStrength: 10,
+  checkin: 2,
+  pr: 1,
 } as const;
 
 export function getTotalXp(data: AppData): number {
@@ -31,7 +44,7 @@ export function getJourneyXp(data: AppData): number {
 }
 
 export function getRewardCoins(data: AppData): number {
-  return Math.max(0, getGrossXp(data) - getTotalCoinsPenalty(data));
+  return Math.max(0, getGrossCoins(data) - getTotalCoinsPenalty(data));
 }
 
 export function getGrossXp(data: AppData): number {
@@ -41,6 +54,15 @@ export function getGrossXp(data: AppData): number {
   );
   const checkinXp = data.bodyCheckins.length * XP_RULES.checkin;
   return sessionXp + checkinXp + getWeeklyStrengthBonus(data.sessions);
+}
+
+export function getGrossCoins(data: AppData): number {
+  const sessionCoins = data.sessions.reduce(
+    (sum, session) => sum + (session.earnedCoins ?? calculateSessionCoins(session)),
+    0,
+  );
+  const checkinCoins = data.bodyCheckins.length * COIN_RULES.checkin;
+  return sessionCoins + checkinCoins + getWeeklyStrengthCoinBonus(data.sessions);
 }
 
 export function getClaimedXp(rewards: Reward[]): number {
@@ -89,6 +111,14 @@ export function calculateSessionXp(session: TrainingSession): number {
   return setXp + exerciseXp + executionXp + workoutBonus(session);
 }
 
+export function calculateSessionCoins(session: TrainingSession): number {
+  if (!isExecutionComplete(session)) {
+    return 0;
+  }
+
+  return workoutCoinBonus(session);
+}
+
 function isExecutionComplete(session: TrainingSession): boolean {
   if (session.status !== "completed") {
     return false;
@@ -102,6 +132,16 @@ function isExecutionComplete(session: TrainingSession): boolean {
 }
 
 export function getWeeklyStrengthBonus(sessions: TrainingSession[]): number {
+  return countWeeksWithThreeStrengthSessions(sessions) *
+    XP_RULES.weekWithThreeStrength;
+}
+
+export function getWeeklyStrengthCoinBonus(sessions: TrainingSession[]): number {
+  return countWeeksWithThreeStrengthSessions(sessions) *
+    COIN_RULES.weekWithThreeStrength;
+}
+
+function countWeeksWithThreeStrengthSessions(sessions: TrainingSession[]): number {
   const weeks = new Map<string, Set<string>>();
 
   sessions
@@ -116,8 +156,7 @@ export function getWeeklyStrengthBonus(sessions: TrainingSession[]): number {
       weeks.set(key, workouts);
     });
 
-  return [...weeks.values()].filter((workouts) => workouts.size >= 3).length *
-    XP_RULES.weekWithThreeStrength;
+  return [...weeks.values()].filter((workouts) => workouts.size >= 3).length;
 }
 
 function workoutBonus(session: TrainingSession): number {
@@ -139,6 +178,29 @@ function workoutBonus(session: TrainingSession): number {
   }
   if (session.workoutId === "capoeira") {
     return XP_RULES.capoeiraCompleted;
+  }
+  return 0;
+}
+
+function workoutCoinBonus(session: TrainingSession): number {
+  if (session.status !== "completed") {
+    return 0;
+  }
+
+  if (session.workoutId.startsWith("treino-")) {
+    return COIN_RULES.strengthWorkoutCompleted;
+  }
+  if (session.workoutId === "boxe") {
+    return COIN_RULES.boxingCompleted;
+  }
+  if (session.workoutId === "basquete-handles") {
+    return COIN_RULES.basketballCompleted;
+  }
+  if (session.workoutId === "danca") {
+    return COIN_RULES.danceCompleted;
+  }
+  if (session.workoutId === "capoeira") {
+    return COIN_RULES.capoeiraCompleted;
   }
   return 0;
 }

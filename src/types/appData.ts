@@ -13,6 +13,7 @@ export type Settings = {
   onboardingDone: boolean;
   preferredWeightStepKg: number;
   theme: "dark";
+  economyVersion?: number;
 };
 
 export type BodyCheckin = {

@@ -1,4 +1,5 @@
 import type { TrainingSession } from "../types/training";
+import { COIN_RULES, XP_RULES } from "./gamification";
 import { getCompletedWorkSets, getMaxWorkWeight, isWorkSet } from "./sets";
 
 export type PrEvent = {
@@ -80,7 +81,14 @@ export function detectSessionPrs(
 }
 
 export function getPrBonus(session: TrainingSession, previousSessions: TrainingSession[]): number {
-  return detectSessionPrs(session, previousSessions).length * 20;
+  return detectSessionPrs(session, previousSessions).length * XP_RULES.pr;
+}
+
+export function getPrCoinBonus(
+  session: TrainingSession,
+  previousSessions: TrainingSession[],
+): number {
+  return detectSessionPrs(session, previousSessions).length * COIN_RULES.pr;
 }
 
 function getPreviousMaxWeight(

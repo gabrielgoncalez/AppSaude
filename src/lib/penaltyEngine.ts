@@ -2,12 +2,12 @@ import { endOfWeek, format, parseISO, startOfMonth, startOfWeek } from "date-fns
 import type { AppData, DayEvent, PenaltyEvent } from "../types/appData";
 import { daysUntilNextCheckin } from "./dates";
 
-export const MISSED_COIN_PENALTIES = [100, 150, 250, 400] as const;
-export const RECOVERY_COIN_PENALTIES = [25, 50, 100] as const;
+export const MISSED_COIN_PENALTIES = [12, 20, 35, 60] as const;
+export const RECOVERY_COIN_PENALTIES = [4, 8, 15] as const;
 export const MISSED_COMMITMENT_PENALTY = 20;
 export const RECOVERY_COMMITMENT_PENALTY = 8;
-export const LATE_CHECKIN_COIN_PENALTY = 75;
-export const LATE_MEASUREMENT_COIN_PENALTY = 100;
+export const LATE_CHECKIN_COIN_PENALTY = 8;
+export const LATE_MEASUREMENT_COIN_PENALTY = 12;
 export const LATE_CHECKIN_COMMITMENT_PENALTY = 10;
 export const LATE_MEASUREMENT_COMMITMENT_PENALTY = 10;
 

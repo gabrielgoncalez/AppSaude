@@ -42,7 +42,7 @@ function getMonthlyGoalTrigger(data: AppData, date: Date): BehaviorRewardTrigger
       ? "Você já bateu uma meta mensal de carga. Vale recompensa planejada."
       : "Bata a meta do mês em um exercício para liberar uma recompensa comportamental.",
     status: hit ? "unlocked" : "progress",
-    bonusXp: 40,
+    bonusXp: 8,
   };
 }
 
@@ -63,7 +63,7 @@ function getNoMissTrigger(data: AppData, date: Date): BehaviorRewardTrigger {
         ? "Três semanas limpas. Consistência virou moeda."
         : "Complete 3 semanas sem falta registrada.",
     status: !hasMiss && hasTraining ? "unlocked" : "progress",
-    bonusXp: 60,
+    bonusXp: 12,
   };
 }
 
@@ -79,7 +79,7 @@ function getCheckinTrigger(data: AppData, date: Date): BehaviorRewardTrigger {
       ? "Check-in salvo dentro da janela. Boa manutenção do painel."
       : "Faça o check-in de 15 dias para manter leitura de peso e recuperação.",
     status: onTime ? "unlocked" : "progress",
-    bonusXp: 30,
+    bonusXp: 3,
   };
 }
 
@@ -110,6 +110,6 @@ function getLoadIncreaseTrigger(data: AppData, date: Date): BehaviorRewardTrigge
       ? "Você subiu carga nos últimos 14 dias. Recompensa boa para reforçar execução."
       : "Suba carga com técnica em um exercício-chave para liberar este gatilho.",
     status: recentIncrease ? "unlocked" : "progress",
-    bonusXp: 35,
+    bonusXp: 5,
   };
 }

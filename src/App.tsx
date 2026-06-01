@@ -16,6 +16,7 @@ import { TodayWorkoutPage } from "./features/today/TodayWorkoutPage";
 import { buildCheckinInsight, type CheckinInsight } from "./lib/checkinInsights";
 import { isSessionToday } from "./lib/dates";
 import {
+  calculateSessionCoins,
   calculateSessionXp,
   claimReward,
   getAvailableXp,
@@ -35,7 +36,8 @@ import {
   selectWorkoutForToday,
 } from "./lib/schedule";
 import { buildWorkoutSummary, type WorkoutSummary } from "./lib/postWorkout";
-import { getPrBonus } from "./lib/progressionEngine";
+import { normalizeAppDataForEconomy } from "./lib/economyMigration";
+import { getPrBonus, getPrCoinBonus } from "./lib/progressionEngine";
 import { getTodayPrescription } from "./lib/prescriptionEngine";
 import type { PrescribedBlock } from "./lib/prescriptionEngine";
 import { countCompletedWorkSets, isWorkSet } from "./lib/sets";
@@ -170,7 +172,8 @@ export default function App() {
       }
       const before = options.before ?? next;
       const normalized = normalizeAppDataForWave(next);
-      const resolved = resolvePendingDays(normalized.data);
+      const economyNormalized = normalizeAppDataForEconomy(normalized.data);
+      const resolved = resolvePendingDays(economyNormalized.data);
       const pendingWrite = pendingWriteRef.current;
       if (
         options.source === "cloud" &&
@@ -204,7 +207,10 @@ export default function App() {
       if (options.source === "cloud") {
         setError("");
       }
-      if (options.persistDerived && (normalized.changed || resolved.changed)) {
+      if (
+        options.persistDerived &&
+        (normalized.changed || economyNormalized.changed || resolved.changed)
+      ) {
         void saveDerivedAppData(uid, before, resolved.data).catch((reason: unknown) => {
           setError(getSyncErrorMessage(reason, "Erro ao resolver agenda."));
         });
@@ -400,13 +406,9 @@ export default function App() {
     session: TrainingSession,
     exercise: Exercise,
   ): TrainingSession {
-    const block = todayPrescription?.prescribedBlocks.find((candidate) =>
-      candidate.items.some(
-        (item) =>
-          item.exercise.id === exercise.id ||
-          Boolean(item.exercise.legacyIds?.includes(exercise.id)),
-      ),
-    );
+    const match = findPrescribedSlotForExercise(exercise);
+    const block = match?.block;
+    const slotExercise = match?.slotExercise ?? exercise;
     const log = session.exercises.find(
       (item) =>
         item.exerciseId === exercise.id ||
@@ -418,7 +420,7 @@ export default function App() {
 
     const completedItems = unique([
       ...(session.completedItems ?? []),
-      getCompletionKey(block.id, exercise.id),
+      getCompletionKey(block.id, slotExercise.id),
     ]);
     const completedBlocks = isDailyBlockCompleted({
       block,
@@ -433,6 +435,26 @@ export default function App() {
       completedItems,
       completedBlocks,
     };
+  }
+
+  function findPrescribedSlotForExercise(exercise: Exercise) {
+    for (const block of todayPrescription?.prescribedBlocks ?? []) {
+      for (const item of block.items) {
+        const matchesSlot =
+          item.exercise.id === exercise.id ||
+          Boolean(item.exercise.legacyIds?.includes(exercise.id));
+        const matchesVariant = item.variantOptions?.some(
+          (option) =>
+            option.exercise.id === exercise.id ||
+            Boolean(option.exercise.legacyIds?.includes(exercise.id)),
+        );
+        if (matchesSlot || matchesVariant) {
+          return { block, slotExercise: item.exercise };
+        }
+      }
+    }
+
+    return undefined;
   }
 
   function addSet(exercise: Exercise, set: SetLog) {
@@ -787,7 +809,9 @@ export default function App() {
       return;
     }
 
-    const next = ensureSchedule(imported);
+    const normalized = normalizeAppDataForWave(imported);
+    const economyNormalized = normalizeAppDataForEconomy(normalized.data);
+    const next = ensureSchedule(economyNormalized.data);
     latestDataRef.current = next;
     setData(next);
     suppressCloudSyncRef.current = true;
@@ -1046,14 +1070,23 @@ function withRecalculatedXp(
   session: TrainingSession,
   previousSessions: TrainingSession[] = [],
 ): TrainingSession {
-  const withoutXp = { ...session, earnedXp: 0 };
-  const prBonus = session.status === "completed" ? getPrBonus(withoutXp, previousSessions) : 0;
+  const withoutXp = {
+    ...session,
+    earnedXp: 0,
+    earnedCoins: 0,
+    prBonusXp: 0,
+    prBonusCoins: 0,
+  };
+  const prBonusXp =
+    session.status === "completed" ? getPrBonus(withoutXp, previousSessions) : 0;
+  const prBonusCoins =
+    session.status === "completed" ? getPrCoinBonus(withoutXp, previousSessions) : 0;
   return {
     ...withoutXp,
-    earnedXp: calculateSessionXp(withoutXp) + prBonus,
-    earnedCoins: calculateSessionXp(withoutXp) + prBonus,
-    prBonusXp: prBonus,
-    prBonusCoins: prBonus,
+    earnedXp: calculateSessionXp(withoutXp) + prBonusXp,
+    earnedCoins: calculateSessionCoins(withoutXp) + prBonusCoins,
+    prBonusXp,
+    prBonusCoins,
   };
 }
 
