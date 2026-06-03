@@ -32,6 +32,7 @@ import {
   getPlanLineages,
   type RepsByWeightPoint,
 } from "../../lib/exerciseAnalytics";
+import { getCapoeiraProgressSummary } from "../../lib/capoeiraProgress";
 import { formatKg } from "../../lib/progression";
 import type { AppData } from "../../types/appData";
 import { ChartFrame } from "./charts/ChartFrame";
@@ -313,17 +314,12 @@ function getTechnicalSummary(data: AppData) {
   );
   const count = (workoutId: string) =>
     technicalSessions.filter((session) => session.workoutId === workoutId).length;
-  const capoeiraMastered = data.capoeiraMovements?.filter(
-    (movement) => movement.status === "mastered",
-  ).length ?? 0;
-  const capoeiraValidating = data.capoeiraMovements?.filter(
-    (movement) => movement.status === "validating",
-  ).length ?? 0;
+  const capoeira = getCapoeiraProgressSummary(data);
 
   return {
     basketball: `${count("basquete-handles")} sessões`,
     boxing: `${count("boxe")} sessões`,
-    capoeira: `${capoeiraMastered} dom. / ${capoeiraValidating} val.`,
+    capoeira: `${capoeira.completedCards} cards / ${capoeira.mastered} dom. / ${capoeira.validating} val.`,
     dance: `${count("danca")} sessões`,
   };
 }

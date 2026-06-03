@@ -5,6 +5,7 @@ import type { CapoeiraMovement, CapoeiraMovementStatus } from "../../types/appDa
 
 type CapoeiraPageProps = {
   movements: CapoeiraMovement[];
+  trainingReviewCount?: number;
   onUpdate: (movements: CapoeiraMovement[]) => void;
 };
 
@@ -16,7 +17,11 @@ const statusOptions: Array<{ value: CapoeiraMovementStatus; label: string }> = [
   { value: "review", label: "Revisão" },
 ];
 
-export function CapoeiraPage({ movements, onUpdate }: CapoeiraPageProps) {
+export function CapoeiraPage({
+  movements,
+  trainingReviewCount = 0,
+  onUpdate,
+}: CapoeiraPageProps) {
   const nextMovement =
     movements.find((item) => item.status === "learning") ??
     movements.find((item) => item.status === "not_started") ??
@@ -45,9 +50,10 @@ export function CapoeiraPage({ movements, onUpdate }: CapoeiraPageProps) {
         <h2 className="text-2xl font-black text-white">Biblioteca e revisão</h2>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Metric label="Movimentos" value={`${movements.length}`} />
         <Metric label="Dominados" value={`${mastered}`} />
+        <Metric label="Revisoes em treinos" value={`${trainingReviewCount}`} />
         <Metric label="Validação" value={`${validating}`} />
       </div>
 

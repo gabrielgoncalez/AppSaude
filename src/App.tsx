@@ -14,6 +14,12 @@ import { RewardsPage } from "./features/rewards/RewardsPage";
 import { PostWorkoutSummary } from "./features/today/PostWorkoutSummary";
 import { TodayWorkoutPage } from "./features/today/TodayWorkoutPage";
 import { buildCheckinInsight, type CheckinInsight } from "./lib/checkinInsights";
+import {
+  getCapoeiraProgressSummary,
+  isCapoeiraExercise,
+  syncCapoeiraMovementsFromExercise,
+  syncCapoeiraMovementsFromTechnicalBlocks,
+} from "./lib/capoeiraProgress";
 import { isSessionToday } from "./lib/dates";
 import {
   calculateSessionCoins,
@@ -44,6 +50,7 @@ import { countCompletedWorkSets, isWorkSet } from "./lib/sets";
 import {
   getCompletionKey,
   isDailyBlockCompleted,
+  isDailyItemCompleted,
   toggleScopedCompletion,
 } from "./lib/dailyCompletion";
 import { normalizeAppDataForWave } from "./lib/trainingPlan";
@@ -386,7 +393,14 @@ export default function App() {
     }));
   }
 
-  function updateTodaySession(updater: (session: TrainingSession) => TrainingSession) {
+  function updateTodaySession(
+    updater: (session: TrainingSession) => TrainingSession,
+    updateData?: (
+      nextData: AppData,
+      previousSession: TrainingSession,
+      updatedSession: TrainingSession,
+    ) => AppData,
+  ) {
     if (!data || !workout) {
       return;
     }
@@ -394,12 +408,13 @@ export default function App() {
     const current = todaySession ?? createSession(workout);
     const updated = withRecalculatedXp(updater(current));
     const exists = data.sessions.some((session) => session.id === updated.id);
-    commit({
+    const nextData = {
       ...data,
       sessions: exists
         ? data.sessions.map((session) => (session.id === updated.id ? updated : session))
         : [...data.sessions, updated],
-    });
+    };
+    commit(updateData ? updateData(nextData, current, updated) : nextData);
   }
 
   function syncSessionExerciseCompletion(
@@ -494,26 +509,46 @@ export default function App() {
 
   function completeChecklistItem(block: PrescribedBlock, item: Exercise) {
     setWorkoutSummary(undefined);
-    updateTodaySession((session) => {
-      const completedItems = toggleScopedCompletion(
-        session.completedItems ?? [],
-        block.id,
-        item,
-      );
-      const blockCompleted = isDailyBlockCompleted({
-        block,
-        completedItems,
-        exerciseLogs: session.exercises,
-      });
-      return {
-        ...session,
-        status: "partial",
-        completedItems,
-        completedBlocks: blockCompleted
-          ? unique([...(session.completedBlocks ?? []), block.id])
-          : (session.completedBlocks ?? []).filter((id) => id !== block.id),
-      };
-    });
+    updateTodaySession(
+      (session) => {
+        const completedItems = toggleScopedCompletion(
+          session.completedItems ?? [],
+          block.id,
+          item,
+        );
+        const blockCompleted = isDailyBlockCompleted({
+          block,
+          completedItems,
+          exerciseLogs: session.exercises,
+        });
+        return {
+          ...session,
+          status: "partial",
+          completedItems,
+          completedBlocks: blockCompleted
+            ? unique([...(session.completedBlocks ?? []), block.id])
+            : (session.completedBlocks ?? []).filter((id) => id !== block.id),
+        };
+      },
+      (nextData, previousSession) => {
+        const wasCompleted = isDailyItemCompleted({
+          blockId: block.id,
+          item,
+          completedItems: previousSession.completedItems,
+          exerciseLogs: previousSession.exercises,
+        });
+        if (wasCompleted || !isCapoeiraExercise(item)) {
+          return nextData;
+        }
+        return {
+          ...nextData,
+          capoeiraMovements: syncCapoeiraMovementsFromExercise(
+            nextData.capoeiraMovements,
+            item,
+          ),
+        };
+      },
+    );
   }
 
   function completeChecklistItemAndWorkout(block: PrescribedBlock, item: Exercise) {
@@ -523,6 +558,12 @@ export default function App() {
     setWorkoutSummary(undefined);
     const current = todaySession ?? createSession(workout);
     const previousSessions = data.sessions.filter((session) => session.id !== current.id);
+    const wasCompleted = isDailyItemCompleted({
+      blockId: block.id,
+      item,
+      completedItems: current.completedItems,
+      exerciseLogs: current.exercises,
+    });
     const completedItems = unique([
       ...(current.completedItems ?? []),
       getCompletionKey(block.id, item.id),
@@ -547,7 +588,15 @@ export default function App() {
     const sessions = exists
       ? data.sessions.map((session) => (session.id === updated.id ? updated : session))
       : [...data.sessions, updated];
-    const completedData = completeWorkoutDay({ ...data, sessions }, workout);
+    const baseData = {
+      ...data,
+      sessions,
+      capoeiraMovements:
+        !wasCompleted && isCapoeiraExercise(item)
+          ? syncCapoeiraMovementsFromExercise(data.capoeiraMovements, item)
+          : data.capoeiraMovements,
+    };
+    const completedData = completeWorkoutDay(baseData, workout);
     const resolvedNextWorkout =
       completedData.trainingPlan.workouts.find(
         (candidate) => candidate.id === completedData.schedule.activeWorkoutId,
@@ -639,13 +688,26 @@ export default function App() {
     const sessions = exists
       ? data.sessions.map((session) => (session.id === updated.id ? updated : session))
       : [...data.sessions, updated];
+    const capoeiraMovements = syncCapoeiraMovementsFromTechnicalBlocks(
+      data.capoeiraMovements,
+      metrics.technicalBlocks,
+      {
+        previousTechnicalBlocks: current.technicalBlocks,
+        previousCompletedItems: current.completedItems,
+      },
+    );
+    const dataWithSession = {
+      ...data,
+      sessions,
+      capoeiraMovements,
+    };
     if (targetStatus !== "completed") {
-      commit(markWorkoutPartial({ ...data, sessions }, workout));
+      commit(markWorkoutPartial(dataWithSession, workout));
       setWorkoutSummary(undefined);
       return;
     }
 
-    const completedData = completeWorkoutDay({ ...data, sessions }, workout);
+    const completedData = completeWorkoutDay(dataWithSession, workout);
     const resolvedNextWorkout =
       completedData.trainingPlan.workouts.find(
         (candidate) => candidate.id === completedData.schedule.activeWorkoutId,
@@ -904,6 +966,7 @@ export default function App() {
   }
 
   const navView = view === "checkin" ? "hoje" : view;
+  const capoeiraProgress = getCapoeiraProgressSummary(data);
 
   return (
     <AppShell
@@ -967,6 +1030,7 @@ export default function App() {
       {view === "capoeira" ? (
         <CapoeiraPage
           movements={data.capoeiraMovements ?? []}
+          trainingReviewCount={capoeiraProgress.completedCards}
           onUpdate={updateCapoeiraMovements}
         />
       ) : null}

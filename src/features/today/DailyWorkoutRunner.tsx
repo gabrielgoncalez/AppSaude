@@ -280,6 +280,20 @@ export function DailyWorkoutRunner({
     });
   }
 
+  function finishTechnicalMission() {
+    const { completedBlocks, completedItems } = getCompletedStateWith();
+    onCompleteSkillWorkout({
+      ...getInitialMetrics(workout.id),
+      status: "completed",
+      completedBlocks,
+      completedItems,
+      technicalBlocks: buildTechnicalBlocks(workout, blocks, metricsByItem, {
+        completedItems,
+        completedBlocks,
+      }),
+    });
+  }
+
   function completeCurrentItem(entry: DailyQueueItem) {
     if (shouldFinishOnCurrent) {
       if (isStrengthWorkout) {
@@ -358,8 +372,8 @@ export function DailyWorkoutRunner({
               Finalizar missao
             </Button>
           ) : (
-            <Button className="mt-3 w-full py-3" onClick={() => savePartial()}>
-              Salvar parcial
+            <Button className="mt-3 w-full py-3" onClick={finishTechnicalMission}>
+              Finalizar missao
             </Button>
           )}
         </Card>
@@ -415,7 +429,7 @@ export function DailyWorkoutRunner({
             Concluidos
           </Button>
         ) : null}
-        {!isStrengthWorkout && completedEntries.length ? (
+        {!isStrengthWorkout && current && completedEntries.length ? (
           <Button onClick={() => savePartial()} variant="ghost">
             Salvar parcial
           </Button>
