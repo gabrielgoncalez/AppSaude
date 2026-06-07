@@ -153,6 +153,9 @@ function isStructuredMasterPlan(plan: TrainingPlan): boolean {
   if (hasLegacyWarmupArtifacts(plan)) {
     return false;
   }
+  if (hasDeadBugInTreinoBStrength(plan)) {
+    return false;
+  }
 
   const workoutsById = new Map(plan.workouts.map((workout) => [workout.id, workout]));
   const requiredWorkoutIds = [
@@ -173,6 +176,12 @@ function isStructuredMasterPlan(plan: TrainingPlan): boolean {
 function hasLegacyWarmupArtifacts(plan: TrainingPlan): boolean {
   const serialized = JSON.stringify(plan);
   return LEGACY_WARMUP_ARTIFACTS.some((artifact) => serialized.includes(artifact));
+}
+
+function hasDeadBugInTreinoBStrength(plan: TrainingPlan): boolean {
+  const treinoB = plan.workouts.find((workout) => workout.id === "treino-b");
+  const strengthBlock = treinoB?.workoutBlocks?.find((block) => block.id === "b-musculacao");
+  return Boolean(strengthBlock?.items.some((item) => item.id === "dead-bug-b"));
 }
 
 function cloneTrainingPlan(plan: TrainingPlan): TrainingPlan {

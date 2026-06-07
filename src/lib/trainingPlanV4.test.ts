@@ -4,13 +4,13 @@ import { MASTER_TRAINING_PLAN_VERSION } from "../data/initialTrainingPlan";
 import type { AppData } from "../types/appData";
 import { normalizeAppDataForWave } from "./trainingPlan";
 
-describe("training plan v7", () => {
+describe("training plan v8", () => {
   it("remove aquecimento especifico separado dos treinos A/B/C", () => {
     const data = createInitialAppData(new Date("2026-05-25T10:00:00.000Z"));
     const serialized = JSON.stringify(data.trainingPlan);
 
     expect(data.trainingPlan.version).toBe(MASTER_TRAINING_PLAN_VERSION);
-    expect(MASTER_TRAINING_PLAN_VERSION).toBe(7);
+    expect(MASTER_TRAINING_PLAN_VERSION).toBe(8);
     expect(serialized).not.toContain("a-aquecimento-especifico");
     expect(serialized).not.toContain("b-aquecimento-especifico");
     expect(serialized).not.toContain("c-aquecimento-especifico");
@@ -48,7 +48,7 @@ describe("training plan v7", () => {
     const normalized = normalizeAppDataForWave(data);
 
     expect(normalized.changed).toBe(true);
-    expect(normalized.data.trainingPlan.version).toBe(7);
+    expect(normalized.data.trainingPlan.version).toBe(8);
     expect(JSON.stringify(normalized.data.trainingPlan)).not.toContain("Leg Press leve");
   });
 
@@ -57,8 +57,40 @@ describe("training plan v7", () => {
     const normalized = normalizeAppDataForWave(data);
 
     expect(normalized.changed).toBe(true);
-    expect(normalized.data.trainingPlan.version).toBe(7);
+    expect(normalized.data.trainingPlan.version).toBe(8);
     expect(JSON.stringify(normalized.data.trainingPlan)).not.toContain("a-aquecimento-especifico");
+  });
+
+  it("mantem Dead Bug na base corporal e remove da musculacao principal do Treino B", () => {
+    const data = createInitialAppData(new Date("2026-05-25T10:00:00.000Z"));
+    const treinoB = data.trainingPlan.workouts.find((workout) => workout.id === "treino-b");
+    const strengthIds =
+      treinoB?.workoutBlocks
+        ?.find((block) => block.id === "b-musculacao")
+        ?.items.map((item) => item.id) ?? [];
+    const baseIds =
+      treinoB?.workoutBlocks
+        ?.find((block) => block.id === "b-base-corporal")
+        ?.items.map((item) => item.id) ?? [];
+
+    expect(strengthIds).not.toContain("dead-bug-b");
+    expect(baseIds).toContain("base-dead-bug-ativacao");
+  });
+
+  it("substitui plano v7 com Dead Bug dentro da musculacao principal", () => {
+    const data = withDeadBugInTreinoBStrength();
+    const normalized = normalizeAppDataForWave(data);
+    const treinoB = normalized.data.trainingPlan.workouts.find(
+      (workout) => workout.id === "treino-b",
+    );
+    const strengthIds =
+      treinoB?.workoutBlocks
+        ?.find((block) => block.id === "b-musculacao")
+        ?.items.map((item) => item.id) ?? [];
+
+    expect(normalized.changed).toBe(true);
+    expect(normalized.data.trainingPlan.version).toBe(8);
+    expect(strengthIds).not.toContain("dead-bug-b");
   });
 });
 
@@ -93,5 +125,29 @@ function withLegacyWarmupArtifact(version: number, artifact: string): AppData {
       ],
     },
   ];
+  return data;
+}
+
+function withDeadBugInTreinoBStrength(): AppData {
+  const data = createInitialAppData(new Date("2026-05-25T10:00:00.000Z"));
+  data.trainingPlan = structuredClone(data.trainingPlan);
+  data.trainingPlan.version = 7;
+  const treinoB = data.trainingPlan.workouts.find((workout) => workout.id === "treino-b");
+  const strengthBlock = treinoB?.workoutBlocks?.find((block) => block.id === "b-musculacao");
+  if (!strengthBlock) {
+    throw new Error("Bloco de musculacao do Treino B nao encontrado.");
+  }
+  strengthBlock.items.push({
+    id: "dead-bug-b",
+    displayName: "Dead Bug",
+    name: "Dead Bug",
+    type: "core",
+    kind: "core",
+    targetSets: 2,
+    repMin: 8,
+    repMax: 12,
+    restSec: 60,
+    active: true,
+  });
   return data;
 }

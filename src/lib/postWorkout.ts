@@ -1,7 +1,10 @@
-import type { ExerciseLog, TrainingSession, Workout } from "../types/training";
+import type { PrescribedBlock } from "./prescriptionEngine";
+import type { Exercise, ExerciseLog, TrainingSession, Workout } from "../types/training";
 import { getActiveExercises } from "./exerciseAnalytics";
+import { isDailyItemCompleted } from "./dailyCompletion";
 import { formatKg } from "./progression";
 import { countCompletedWorkSets, getCompletedWorkSets, getMaxWorkWeight } from "./sets";
+import { isStrengthExercise } from "./workoutItems";
 
 export type WorkoutNewMax = {
   exerciseId: string;
@@ -26,20 +29,27 @@ export function buildWorkoutSummary({
   previousSessions,
   workout,
   nextWorkout,
+  prescribedBlocks,
 }: {
   session: TrainingSession;
   previousSessions: TrainingSession[];
   workout: Workout;
   nextWorkout: Workout;
+  prescribedBlocks?: PrescribedBlock[];
 }): WorkoutSummary {
-  const activeExercises = getActiveExercises(workout);
-  const totalExercises = activeExercises.length || (workout.blocks?.length ? 1 : 0);
-  const completedExercises = activeExercises.length
-    ? activeExercises.filter((exercise) => {
-        const log = session.exercises.find((candidate) => candidate.exerciseId === exercise.id);
-        const completedSets = countCompletedWorkSets(log);
-        return Boolean(log?.completed) || completedSets >= exercise.targetSets;
-      }).length
+  const summaryItems = getSummaryItems(workout, prescribedBlocks);
+  const totalExercises = summaryItems.length || (workout.blocks?.length ? 1 : 0);
+  const completedExercises = summaryItems.length
+    ? summaryItems.filter(({ blockId, exercise }) =>
+        blockId
+          ? isDailyItemCompleted({
+              blockId,
+              item: exercise,
+              completedItems: session.completedItems,
+              exerciseLogs: session.exercises,
+            })
+          : isExerciseLogComplete(session, exercise),
+      ).length
     : session.status === "completed"
       ? totalExercises
       : 0;
@@ -60,6 +70,32 @@ export function buildWorkoutSummary({
       nextWorkout,
     }),
   };
+}
+
+function getSummaryItems(
+  workout: Workout,
+  prescribedBlocks?: PrescribedBlock[],
+): Array<{ blockId?: string; exercise: Exercise }> {
+  const prescribedItems = prescribedBlocks?.flatMap((block) =>
+    block.blockMode === "sets"
+      ? block.items
+          .map((item) => item.exercise)
+          .filter(isStrengthExercise)
+          .map((exercise) => ({ blockId: block.id, exercise }))
+      : [],
+  );
+
+  if (prescribedItems?.length) {
+    return prescribedItems;
+  }
+
+  return getActiveExercises(workout).map((exercise) => ({ exercise }));
+}
+
+function isExerciseLogComplete(session: TrainingSession, exercise: Exercise): boolean {
+  const log = session.exercises.find((candidate) => candidate.exerciseId === exercise.id);
+  const completedSets = countCompletedWorkSets(log);
+  return Boolean(log?.completed) || completedSets >= exercise.targetSets;
 }
 
 function getNewMaxes(

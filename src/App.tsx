@@ -614,6 +614,7 @@ export default function App() {
         previousSessions,
         workout: summaryWorkout,
         nextWorkout: resolvedNextWorkout,
+        prescribedBlocks: todayPrescription?.prescribedBlocks,
       }),
     );
     commit(completedData);
@@ -652,6 +653,7 @@ export default function App() {
         previousSessions,
         workout: summaryWorkout,
         nextWorkout: resolvedNextWorkout,
+        prescribedBlocks: todayPrescription?.prescribedBlocks,
       }),
     );
     commit(completedData);

@@ -9,7 +9,7 @@ import type {
 } from "../types/training";
 
 export const MASTER_TRAINING_PLAN_ID = "gigante-agil-master-plan";
-export const MASTER_TRAINING_PLAN_VERSION = 7;
+export const MASTER_TRAINING_PLAN_VERSION = 8;
 
 type ExerciseInput = Omit<Exercise, "name" | "targetSets" | "restSec"> & {
   displayName: string;
@@ -1236,26 +1236,6 @@ const treinoB: Workout = {
         equipment: "halter",
         strengthWaveEligible: false,
         note: "Cotovelos perto do corpo, punho neutro, sem balançar tronco e descida controlada.",
-      }),
-      strength({
-        id: "dead-bug-b",
-        displayName: "Dead Bug",
-        type: "core",
-        kind: "core",
-        priority: "support",
-        movementPattern: "core anti-extensão",
-        lineageId: "anti-extension-core",
-        lineageName: "Core anti-extensão",
-        variantRole: "bodyweight",
-        targetSets: 2,
-        repMin: 8,
-        repMax: 12,
-        restSec: 60,
-        equipment: "peso corporal",
-        metricSchema: ["reps", "side", "quality1to5", "completed"],
-        progressionModel: "quality_progression",
-        strengthWaveEligible: false,
-        note: "Lombar controlada, expirar ao estender perna e braço. Preferido na fase atual.",
       }),
       futureExercise({
         id: "abdominal-infra-controlado",
