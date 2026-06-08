@@ -9,7 +9,7 @@ import type {
 } from "../types/training";
 
 export const MASTER_TRAINING_PLAN_ID = "gigante-agil-master-plan";
-export const MASTER_TRAINING_PLAN_VERSION = 8;
+export const MASTER_TRAINING_PLAN_VERSION = 9;
 
 type ExerciseInput = Omit<Exercise, "name" | "targetSets" | "restSec"> & {
   displayName: string;
@@ -1940,76 +1940,19 @@ const danca: Workout = {
 
 danca.blocks = workoutBlocks(danca);
 
-const futureBaseBody = [
-  ["future-wall-sit", "Wall Sit", "time_progression"],
-  ["future-hollow-body-hold", "Hollow Body Hold", "time_progression"],
-  ["future-bear-plank", "Bear Plank", "time_progression"],
-  ["future-dead-hang", "Dead Hang", "time_progression"],
-  ["future-afundo-lateral", "Afundo Lateral", "quality_progression"],
-  ["future-cossack-squat", "Cossack Squat", "quality_progression"],
-  ["future-bear-crawl", "Bear Crawl", "quality_progression"],
-  ["future-bear-crawl-lateral", "Bear Crawl Lateral", "quality_progression"],
-  ["future-crab-hold", "Crab Hold", "time_progression"],
-  ["future-crab-walk", "Crab Walk", "quality_progression"],
-].map(([id, displayName, progressionModel]) =>
-  timed({
-    id,
-    displayName,
-    type: "base_body",
-    kind: "base_body",
-    priority: "future",
-    active: false,
-    phaseAvailability: "future",
-    durationSec: 30,
-    progressionModel: progressionModel as ProgressionModel,
-    referenceSearchQuery: `${displayName} beginner exercise`,
-    note: "Banco futuro de base corporal. Nao aparece no treino ate ser ativado por fase.",
-  }),
-);
-
 const domingo: Workout = {
   id: "descanso",
-  name: "Descanso ou recuperação leve",
+  name: "Domingo - Descanso Planejado",
   dayOfWeek: 0,
   type: "rest",
   modality: "recovery",
   cycleOrder: 0,
   active: true,
-  note: "Domingo planejado não pune. Mobilidade leve e revisão técnica são opcionais.",
-  workoutBlocks: [
-    block("domingo-mobilidade", "Mobilidade Leve de Domingo", "mobility", [
-      timed({
-        id: "domingo-mobilidade-leve",
-        displayName: "Mobilidade leve",
-        type: "mobility",
-        kind: "mobility",
-        durationSec: 600,
-        note: "Opcional. Soltar corpo sem transformar em treino pesado.",
-      }),
-    ]),
-    block("domingo-capoeira-leve", "Revisão Leve de Capoeira opcional", "review", [
-      skill({
-        id: "domingo-ginga-leve",
-        displayName: "Ginga",
-        type: "capoeira_movement",
-        kind: "capoeira_movement",
-        priority: "review",
-        durationSec: 300,
-        progressionModel: "spaced_review",
-        referenceSearchQuery: "Ginga capoeira Mestre Koioty",
-      }),
-    ]),
-    block(
-      "banco-futuro-base-corporal",
-      "Banco Futuro de Base Corporal",
-      "base_body",
-      futureBaseBody,
-      { required: false },
-    ),
-  ],
+  note: "Domingo planejado não pune e não tem missão. Descanso total para recuperar e voltar melhor na segunda.",
+  workoutBlocks: [],
+  exercises: [],
+  blocks: [],
 };
-
-domingo.blocks = workoutBlocks(domingo);
 
 export const INITIAL_TRAINING_PLAN: TrainingPlan = {
   id: MASTER_TRAINING_PLAN_ID,

@@ -4,13 +4,13 @@ import { MASTER_TRAINING_PLAN_VERSION } from "../data/initialTrainingPlan";
 import type { AppData } from "../types/appData";
 import { normalizeAppDataForWave } from "./trainingPlan";
 
-describe("training plan v8", () => {
+describe("training plan v9", () => {
   it("remove aquecimento especifico separado dos treinos A/B/C", () => {
     const data = createInitialAppData(new Date("2026-05-25T10:00:00.000Z"));
     const serialized = JSON.stringify(data.trainingPlan);
 
     expect(data.trainingPlan.version).toBe(MASTER_TRAINING_PLAN_VERSION);
-    expect(MASTER_TRAINING_PLAN_VERSION).toBe(8);
+    expect(MASTER_TRAINING_PLAN_VERSION).toBe(9);
     expect(serialized).not.toContain("a-aquecimento-especifico");
     expect(serialized).not.toContain("b-aquecimento-especifico");
     expect(serialized).not.toContain("c-aquecimento-especifico");
@@ -48,7 +48,7 @@ describe("training plan v8", () => {
     const normalized = normalizeAppDataForWave(data);
 
     expect(normalized.changed).toBe(true);
-    expect(normalized.data.trainingPlan.version).toBe(8);
+    expect(normalized.data.trainingPlan.version).toBe(9);
     expect(JSON.stringify(normalized.data.trainingPlan)).not.toContain("Leg Press leve");
   });
 
@@ -57,7 +57,7 @@ describe("training plan v8", () => {
     const normalized = normalizeAppDataForWave(data);
 
     expect(normalized.changed).toBe(true);
-    expect(normalized.data.trainingPlan.version).toBe(8);
+    expect(normalized.data.trainingPlan.version).toBe(9);
     expect(JSON.stringify(normalized.data.trainingPlan)).not.toContain("a-aquecimento-especifico");
   });
 
@@ -89,8 +89,34 @@ describe("training plan v8", () => {
         ?.items.map((item) => item.id) ?? [];
 
     expect(normalized.changed).toBe(true);
-    expect(normalized.data.trainingPlan.version).toBe(8);
+    expect(normalized.data.trainingPlan.version).toBe(9);
     expect(strengthIds).not.toContain("dead-bug-b");
+  });
+
+  it("mantem domingo como descanso planejado sem cards", () => {
+    const data = createInitialAppData(new Date("2026-05-31T10:00:00.000Z"));
+    const descanso = data.trainingPlan.workouts.find((workout) => workout.id === "descanso");
+
+    expect(descanso).toMatchObject({
+      type: "rest",
+      dayOfWeek: 0,
+      active: true,
+    });
+    expect(descanso?.workoutBlocks ?? []).toHaveLength(0);
+    expect(descanso?.blocks ?? []).toHaveLength(0);
+  });
+
+  it("substitui plano v8 com cards opcionais no domingo", () => {
+    const data = withSundayRestCards();
+    const normalized = normalizeAppDataForWave(data);
+    const descanso = normalized.data.trainingPlan.workouts.find(
+      (workout) => workout.id === "descanso",
+    );
+
+    expect(normalized.changed).toBe(true);
+    expect(normalized.data.trainingPlan.version).toBe(9);
+    expect(descanso?.workoutBlocks ?? []).toHaveLength(0);
+    expect(descanso?.blocks ?? []).toHaveLength(0);
   });
 });
 
@@ -149,5 +175,38 @@ function withDeadBugInTreinoBStrength(): AppData {
     restSec: 60,
     active: true,
   });
+  return data;
+}
+
+function withSundayRestCards(): AppData {
+  const data = createInitialAppData(new Date("2026-05-31T10:00:00.000Z"));
+  data.trainingPlan = structuredClone(data.trainingPlan);
+  data.trainingPlan.version = 8;
+  const descanso = data.trainingPlan.workouts.find((workout) => workout.id === "descanso");
+  if (!descanso) {
+    throw new Error("Domingo de descanso nao encontrado.");
+  }
+  descanso.workoutBlocks = [
+    {
+      id: "domingo-mobilidade",
+      name: "Mobilidade Leve de Domingo",
+      type: "mobility",
+      blockMode: "checklist",
+      required: false,
+      items: [
+        {
+          id: "domingo-mobilidade-leve",
+          displayName: "Mobilidade leve",
+          name: "Mobilidade leve",
+          type: "mobility",
+          kind: "mobility",
+          targetSets: 1,
+          durationSec: 600,
+          restSec: 0,
+        },
+      ],
+    },
+  ];
+  descanso.blocks = ["Mobilidade Leve de Domingo"];
   return data;
 }

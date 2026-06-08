@@ -156,6 +156,9 @@ function isStructuredMasterPlan(plan: TrainingPlan): boolean {
   if (hasDeadBugInTreinoBStrength(plan)) {
     return false;
   }
+  if (hasSundayRestCards(plan)) {
+    return false;
+  }
 
   const workoutsById = new Map(plan.workouts.map((workout) => [workout.id, workout]));
   const requiredWorkoutIds = [
@@ -182,6 +185,11 @@ function hasDeadBugInTreinoBStrength(plan: TrainingPlan): boolean {
   const treinoB = plan.workouts.find((workout) => workout.id === "treino-b");
   const strengthBlock = treinoB?.workoutBlocks?.find((block) => block.id === "b-musculacao");
   return Boolean(strengthBlock?.items.some((item) => item.id === "dead-bug-b"));
+}
+
+function hasSundayRestCards(plan: TrainingPlan): boolean {
+  const sundayRest = plan.workouts.find((workout) => workout.id === "descanso");
+  return Boolean(sundayRest?.workoutBlocks?.length || sundayRest?.blocks?.length);
 }
 
 function cloneTrainingPlan(plan: TrainingPlan): TrainingPlan {

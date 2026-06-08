@@ -37,6 +37,8 @@ export function createInitialSchedule(
   const fixedWorkout = getWorkoutForDate(plan, currentDate);
   const activeWorkout =
     fixedWorkout.type !== "rest" ? fixedWorkout : cycleWorkouts[0] ?? fixedWorkout;
+  const todayWorkout = fixedWorkout.type === "rest" ? fixedWorkout : activeWorkout;
+  const todayStatus = fixedWorkout.type === "rest" ? "planned_rest" : "selected";
 
   return {
     activeWorkoutId: activeWorkout.id,
@@ -45,8 +47,8 @@ export function createInitialSchedule(
     cycleOrder: cycleWorkouts.map((workout) => workout.id),
     hasDebtAlert: false,
     updatedAt: currentDate.toISOString(),
-    todayWorkoutId: activeWorkout.id,
-    todayStatus: "selected",
+    todayWorkoutId: todayWorkout.id,
+    todayStatus,
     todayDate: dayKey(currentDate),
     revision: 1,
   };
@@ -150,6 +152,11 @@ export function selectWorkoutForToday(
 ): AppData {
   const safeData = ensureSchedule(data, date);
   const currentDate = toDate(date);
+  const fixedWorkout = getWorkoutForDate(safeData.trainingPlan, currentDate);
+  if (fixedWorkout.type === "rest") {
+    return applyPlannedRest(safeData, fixedWorkout, currentDate);
+  }
+
   const workout = findWorkoutOrCurrent(safeData, workoutId, currentDate);
   const existing = getStoredDayEvent(safeData, dayKey(currentDate));
   const revision = getNextRevision(safeData.schedule);
@@ -360,6 +367,11 @@ export function markRecoveryRest(
 ): AppData {
   const safeData = ensureSchedule(data, date);
   const currentDate = toDate(date);
+  const fixedWorkout = getWorkoutForDate(safeData.trainingPlan, currentDate);
+  if (fixedWorkout.type === "rest") {
+    return applyPlannedRest(safeData, fixedWorkout, currentDate);
+  }
+
   const workout = getTodayWorkout(safeData, currentDate);
   const existing = getStoredDayEvent(safeData, dayKey(currentDate));
   const revision = getNextRevision(safeData.schedule);
@@ -691,8 +703,17 @@ function normalizeScheduleState(
   const missingCurrentFields =
     !schedule.todayWorkoutId || !schedule.todayStatus || !schedule.todayDate;
   const hasInvalidTodayWorkout = Boolean(schedule.todayWorkoutId) && !todayWorkoutIsValid;
-  const shouldResetToday = !isSameToday || missingCurrentFields;
+  const isFixedRestToday = fixedWorkout.type === "rest";
+  const hasWrongFixedRestToday =
+    isSameToday &&
+    isFixedRestToday &&
+    (schedule.todayWorkoutId !== fixedWorkout.id || schedule.todayStatus !== "planned_rest");
+  const shouldResetToday = !isSameToday || missingCurrentFields || hasWrongFixedRestToday;
   const shouldReplaceTodayWorkout = shouldResetToday || hasInvalidTodayWorkout;
+  const nextTodayWorkoutId =
+    shouldReplaceTodayWorkout && isFixedRestToday ? fixedWorkout.id : fallbackWorkoutId;
+  const nextTodayStatus =
+    shouldReplaceTodayWorkout && isFixedRestToday ? "planned_rest" : "selected";
   const nextRevision =
     schedule.revision === undefined || shouldReplaceTodayWorkout
       ? (schedule.revision ?? 0) + 1
@@ -711,9 +732,9 @@ function normalizeScheduleState(
     hasDebtAlert: schedule.hasDebtAlert ?? false,
     updatedAt,
     todayWorkoutId: shouldReplaceTodayWorkout
-      ? fallbackWorkoutId
+      ? nextTodayWorkoutId
       : (schedule.todayWorkoutId ?? fallbackWorkoutId),
-    todayStatus: shouldReplaceTodayWorkout ? "selected" : (schedule.todayStatus ?? "selected"),
+    todayStatus: shouldReplaceTodayWorkout ? nextTodayStatus : (schedule.todayStatus ?? "selected"),
     todayDate: shouldReplaceTodayWorkout ? key : (schedule.todayDate ?? key),
     revision: nextRevision,
   };

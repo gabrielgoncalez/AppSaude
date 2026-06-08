@@ -86,6 +86,15 @@ describe("schedule", () => {
     const data = createInitialAppData(new Date("2026-05-31T10:00:00"));
     data.settings.onboardingDone = true;
 
+    expect(data.schedule.activeWorkoutId).toBe("treino-a");
+    expect(data.schedule.todayWorkoutId).toBe("descanso");
+    expect(data.schedule.todayStatus).toBe("planned_rest");
+    expect(getTodayWorkout(data, new Date("2026-05-31T10:00:00")).id).toBe("descanso");
+    expect(getDayEvent(data, new Date("2026-05-31T10:00:00"))).toMatchObject({
+      status: "planned_rest",
+      penaltyXp: 0,
+    });
+
     const resolved = resolvePendingDays(data, new Date("2026-06-01T10:00:00"));
 
     expect(getDayEvent(resolved.data, new Date("2026-05-31T10:00:00"))).toMatchObject({
@@ -94,7 +103,7 @@ describe("schedule", () => {
     });
   });
 
-  it("domingo escolhido manualmente vira falta se não concluir", () => {
+  it("domingo escolhido manualmente continua descanso planejado", () => {
     const data = createInitialAppData(new Date("2026-05-31T10:00:00"));
     data.settings.onboardingDone = true;
     const selected = selectWorkoutForToday(
@@ -105,10 +114,26 @@ describe("schedule", () => {
 
     const resolved = resolvePendingDays(selected, new Date("2026-06-01T10:00:00"));
 
+    expect(selected.schedule.activeWorkoutId).toBe("treino-a");
+    expect(selected.schedule.todayWorkoutId).toBe("descanso");
+    expect(selected.schedule.todayStatus).toBe("planned_rest");
     expect(getDayEvent(resolved.data, new Date("2026-05-31T10:00:00"))).toMatchObject({
-      status: "missed",
-      penaltyKind: "missed",
-      penaltyXp: 30,
+      status: "planned_rest",
+      penaltyXp: 0,
+    });
+  });
+
+  it("descanso recuperativo no domingo continua descanso planejado sem penalidade", () => {
+    const data = createInitialAppData(new Date("2026-05-31T10:00:00"));
+    data.settings.onboardingDone = true;
+    const rested = markRecoveryRest(data, new Date("2026-05-31T10:00:00"));
+
+    expect(rested.schedule.activeWorkoutId).toBe("treino-a");
+    expect(rested.schedule.todayWorkoutId).toBe("descanso");
+    expect(rested.schedule.todayStatus).toBe("planned_rest");
+    expect(getDayEvent(rested, new Date("2026-05-31T10:00:00"))).toMatchObject({
+      status: "planned_rest",
+      penaltyXp: 0,
     });
   });
   it("usa a agenda atual mesmo quando existe evento antigo concluido", () => {

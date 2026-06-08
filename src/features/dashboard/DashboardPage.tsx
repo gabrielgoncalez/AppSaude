@@ -68,23 +68,25 @@ export function DashboardPage({
   const cycleWorkouts = getCycleWorkouts(data.trainingPlan);
   const commitment = getMonthlyCommitmentSummary(data);
   const phase = getCurrentPhaseReading(data);
+  const isPlannedRest = dayEvent?.status === "planned_rest" || workout.type === "rest";
   const todayCompleted = dayEvent?.status === "completed";
   const recoveryMarked = dayEvent?.status === "recovery_rest";
-  const canChangeWorkout = !todayCompleted && !recoveryMarked;
-  const canRest = !todayCompleted && !recoveryMarked;
+  const canChangeWorkout = !isPlannedRest && !todayCompleted && !recoveryMarked;
+  const canRest = !isPlannedRest && !todayCompleted && !recoveryMarked;
   const insights = getTrainingInsights(data);
   const group = getWorkoutGroup(data.trainingPlan, workout);
   const selectorWorkouts = cycleWorkouts.some((candidate) => candidate.id === workout.id)
     ? cycleWorkouts
     : [...cycleWorkouts, workout];
-  const visibleItems =
-    workout.workoutBlocks
-      ?.flatMap((block) =>
-        block.items.filter((item) => item.active !== false && item.phaseAvailability !== "future"),
-      )
-      .slice(0, 6) ??
-    workout.exercises?.filter((item) => item.active !== false).slice(0, 6) ??
-    [];
+  const visibleItems = isPlannedRest
+    ? []
+    : workout.workoutBlocks
+        ?.flatMap((block) =>
+          block.items.filter((item) => item.active !== false && item.phaseAvailability !== "future"),
+        )
+        .slice(0, 6) ??
+      workout.exercises?.filter((item) => item.active !== false).slice(0, 6) ??
+      [];
 
   return (
     <div className="space-y-4">
@@ -117,6 +119,7 @@ export function DashboardPage({
           </Button>
         </div>
 
+        {!isPlannedRest ? (
         <div className="mt-5 grid gap-3 lg:grid-cols-[1fr_auto]">
           <label className="space-y-2">
             <span className="flex items-center gap-2 text-sm font-bold text-slate-200">
@@ -148,6 +151,7 @@ export function DashboardPage({
             </Button>
           </div>
         </div>
+        ) : null}
 
         {dayEvent ? (
           <p className="mt-3 rounded-md bg-slate-950 px-3 py-2 text-sm font-bold text-slate-300">

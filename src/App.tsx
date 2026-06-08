@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "./components/AppShell";
 import type { ViewId } from "./components/BottomNav";
+import { Card } from "./components/Card";
 import { DEFAULT_ACHIEVEMENTS } from "./data/achievements";
 import { LoginPage } from "./features/auth/LoginPage";
 import { BackupPage } from "./features/backup/BackupPage";
@@ -282,6 +283,7 @@ export default function App() {
     () => (data ? getDayEvent(data) : undefined),
     [data],
   );
+  const isPlannedRestToday = dayEvent?.status === "planned_rest" || workout?.type === "rest";
   const nextWorkout = useMemo(
     () => {
       if (!data || !workout) {
@@ -991,6 +993,18 @@ export default function App() {
               onOpenRewards={() => navigate("recompensas")}
               summary={workoutSummary}
             />
+          ) : isPlannedRestToday ? (
+            <Card>
+              <p className="text-sm font-bold uppercase tracking-wide text-teal-300">
+                Descanso planejado
+              </p>
+              <h2 className="mt-2 text-2xl font-black text-white">
+                Domingo é descanso.
+              </h2>
+              <p className="mt-2 text-slate-300">
+                Sem missão, sem cards e sem punição. Hoje é para recuperar e voltar melhor na segunda.
+              </p>
+            </Card>
           ) : (
             <TodayWorkoutPage
               onAddSet={addSet}
